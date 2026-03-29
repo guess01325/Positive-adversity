@@ -6,6 +6,8 @@ import { formatCurrency } from '../lib/utils';
 export default function AdminPage() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedUser, setSelectedUser] = useState('all');
+  const [selectedMonth, setSelectedMonth] = useState('all');
 
   useEffect(() => {
     async function loadData() {
@@ -17,8 +19,37 @@ export default function AdminPage() {
     loadData();
   }, []);
 
+  const userOptions = useMemo(() => {
+    const map = new Map();
+
+    entries.forEach((entry) => {
+      const id = entry.userId;
+      const name = entry.userName || entry.name || entry.employeeName || entry.userId;
+
+      if (id && !map.has(id)) {
+        map.set(id, name);
+      }
+    });
+
+    return Array.from(map, ([id, name]) => ({ id, name }));
+  }, [entries]);
+
+  const monthOptions = useMemo(() => {
+    const months = [...new Set(entries.map((entry) => entry.monthKey).filter(Boolean))];
+    return months.sort().reverse();
+  }, [entries]);
+
+  const filteredEntries = useMemo(() => {
+    return entries.filter((entry) => {
+      const userMatch = selectedUser === 'all' || entry.userId === selectedUser;
+      const monthMatch = selectedMonth === 'all' || entry.monthKey === selectedMonth;
+
+      return userMatch && monthMatch;
+    });
+  }, [entries, selectedUser, selectedMonth]);
+
   const totals = useMemo(() => {
-    return entries.reduce(
+    return filteredEntries.reduce(
       (acc, entry) => {
         acc.pay += Number(entry.totalPay || 0);
         acc.hours += Number(entry.hours || 0);
@@ -27,14 +58,14 @@ export default function AdminPage() {
       },
       { pay: 0, hours: 0, count: 0 },
     );
-  }, [entries]);
+  }, [filteredEntries]);
 
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900">Admin payroll view</h2>
+            <h2 className="text-2xl font-bold text-slate-900">All Staff Overview</h2>
             <p className="mt-2 text-sm text-slate-500">
               Review all users, notes, totals, and service entries in one place for HR and payroll.
             </p>
@@ -56,10 +87,49 @@ export default function AdminPage() {
         </div>
       </section>
 
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <div className="w-full sm:w-64">
+            <label className="mb-2 block text-sm font-medium text-slate-700">Filter by user</label>
+            <select
+              value={selectedUser}
+              onChange={(e) => setSelectedUser(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="all">All Users</option>
+              {userOptions.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="w-full sm:w-64">
+            <label className="mb-2 block text-sm font-medium text-slate-700">Filter by month</label>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="all">All Months</option>
+              {monthOptions.map((month) => (
+                <option key={month} value={month}>
+                  {month}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
+
       {loading ? (
         <section className="rounded-2xl bg-white p-6 shadow-sm">Loading admin data...</section>
       ) : (
-        <EntriesByMonth entries={entries} emptyMessage="No employee data has been logged yet." />
+        <EntriesByMonth
+          entries={filteredEntries}
+          emptyMessage="No employee data has been logged yet."
+        />
       )}
     </div>
   );
