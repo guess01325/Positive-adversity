@@ -1,6 +1,6 @@
 export const SERVICE_RATES = {
-  DCF: 50,
-  Mashantucket: 65,
+  DCF: 45,
+  Mashantucket: 50,
 };
 
 export const SERVICE_OPTIONS = Object.keys(SERVICE_RATES);

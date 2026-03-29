@@ -11,18 +11,24 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { isAdminEmail } from './utils';
 
-export async function upsertUserProfile(user, isAdmin = false) {
+export async function upsertUserProfile(user) {
   const userRef = doc(db, 'users', user.uid);
   const existing = await getDoc(userRef);
+
+  const admin = isAdminEmail(user.email);
+  const role = admin ? 'admin' : 'user';
 
   if (!existing.exists()) {
     await setDoc(userRef, {
       uid: user.uid,
-      email: user.email,
-      name: user.displayName || '',
-      isAdmin,
+      email: user.email || '',
+      displayName: user.displayName || '',
+      photoURL: user.photoURL || '',
+      role,
       createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
     return;
   }
@@ -31,12 +37,12 @@ export async function upsertUserProfile(user, isAdmin = false) {
     userRef,
     {
       uid: user.uid,
-      email: user.email,
+      email: user.email || '',
       displayName: user.displayName || '',
       photoURL: user.photoURL || '',
-      role: existing.exists() ? existing.data().role : isAdmin ? 'admin' : 'user',
+      role: existing.data().role || role,
       updatedAt: serverTimestamp(),
-      createdAt: existing.exists() ? existing.data().createdAt : serverTimestamp(),
+      createdAt: existing.data().createdAt || serverTimestamp(),
     },
     { merge: true },
   );
@@ -68,7 +74,11 @@ export async function fetchEntriesByUser(uid) {
 }
 
 export async function fetchAllEntries() {
-  const q = query(collection(db, 'entries'), orderBy('date', 'desc'), orderBy('createdAt', 'desc'));
+  const q = query(
+    collection(db, 'entries'),
+    orderBy('date', 'desc'),
+    orderBy('createdAt', 'desc')
+  );
   const snapshot = await getDocs(q);
   return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
