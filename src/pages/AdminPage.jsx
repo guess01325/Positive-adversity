@@ -52,7 +52,6 @@ export default function AdminPage() {
     return entries.filter((entry) => {
       const userMatch = selectedUser === 'all' || entry.userId === selectedUser;
       const monthMatch = selectedMonth === 'all' || entry.monthKey === selectedMonth;
-
       const studentName = (entry.student || '').toLowerCase();
       const studentMatch = !search || studentName.includes(search);
 
@@ -160,13 +159,15 @@ export default function AdminPage() {
       </section>
 
       {loading ? (
-        <section className="rounded-2xl bg-white p-6 shadow-sm">Loading admin data...</section>
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
+          Loading admin data...
+        </section>
       ) : (
         <EntriesByMonth
           entries={filteredEntries}
           emptyMessage="No employee data has been logged yet."
-          showInternalTotals={true}
           showStudent={true}
+          showInternalTotals={true}
         />
       )}
     </div>

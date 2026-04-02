@@ -1,12 +1,30 @@
-import { formatCurrency, groupEntriesByMonth, toMonthLabel } from '../lib/utils';
+import { useMemo } from 'react';
+import { formatCurrency } from '../lib/utils';
 
-export default function EntriesByMonth({ entries, emptyMessage = 'No entries yet.' }) {
-  const grouped = groupEntriesByMonth(entries);
-  const monthKeys = Object.keys(grouped).sort((a, b) => (a < b ? 1 : -1));
+export default function EntriesByMonth({
+  entries,
+  emptyMessage = 'No entries found.',
+  showInternalTotals = false,
+  showStudent = false,
+}) {
+  const groupedEntries = useMemo(() => {
+    const groups = entries.reduce((acc, entry) => {
+      const month = entry.monthKey || 'No Month';
+
+      if (!acc[month]) {
+        acc[month] = [];
+      }
+
+      acc[month].push(entry);
+      return acc;
+    }, {});
+
+    return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [entries]);
 
   if (!entries.length) {
     return (
-      <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-500 shadow-sm">
+      <section className="rounded-2xl bg-white p-6 shadow-sm">
         {emptyMessage}
       </section>
     );
@@ -14,54 +32,159 @@ export default function EntriesByMonth({ entries, emptyMessage = 'No entries yet
 
   return (
     <div className="space-y-6">
-      {monthKeys.map((monthKey) => {
-        const month = grouped[monthKey];
+      {groupedEntries.map(([month, monthEntries]) => {
+        const monthTotals = monthEntries.reduce(
+          (acc, entry) => {
+            acc.hours += Number(entry.hours || 0);
+            acc.clientPay += Number(entry.totalPay || 0);
+            acc.internalPay += Number(entry.internalTotal || 0);
+            acc.count += 1;
+            return acc;
+          },
+          { hours: 0, clientPay: 0, internalPay: 0, count: 0 },
+        );
+
         return (
-          <section key={monthKey} className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-col justify-between gap-4 border-b border-slate-200 px-6 py-5 sm:flex-row sm:items-center">
+          <section
+            key={month}
+            className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+          >
+            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">{toMonthLabel(monthKey)}</h3>
-                <p className="mt-1 text-sm text-slate-500">{month.entries.length} entries recorded</p>
+                <h3 className="text-xl font-semibold text-slate-900">{month}</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  {monthTotals.count} entries • {monthTotals.hours.toFixed(2)} hours
+                </p>
               </div>
-              <div className="grid grid-cols-2 gap-4 text-sm">
+
+              <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                 <div className="rounded-xl bg-slate-100 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Hours</p>
-                  <p className="mt-1 text-lg font-semibold text-slate-900">{month.totalHours.toFixed(2)}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Client Pay
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-slate-900">
+                    {formatCurrency(monthTotals.clientPay)}
+                  </p>
                 </div>
-                <div className="rounded-xl bg-slate-100 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pay</p>
-                  <p className="mt-1 text-lg font-semibold text-slate-900">{formatCurrency(month.totalPay)}</p>
-                </div>
+
+                {showInternalTotals && (
+                  <div className="rounded-xl bg-slate-100 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Internal Pay
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-slate-900">
+                      {formatCurrency(monthTotals.internalPay)}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-600">Date</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-600">Service</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-600">Hours</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-600">Rate</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-600">Total</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-600">Note</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-600">User</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {month.entries.map((entry) => (
-                    <tr key={entry.id}>
-                      <td className="px-4 py-3 text-slate-700">{entry.date}</td>
-                      <td className="px-4 py-3 text-slate-700">{entry.serviceType}</td>
-                      <td className="px-4 py-3 text-slate-700">{Number(entry.hours).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-slate-700">{formatCurrency(entry.hourlyRate)}</td>
-                      <td className="px-4 py-3 font-medium text-slate-900">{formatCurrency(entry.totalPay)}</td>
-                      <td className="px-4 py-3 text-slate-700">{entry.note}</td>
-                      <td className="px-4 py-3 text-slate-700">{entry.userName || entry.userEmail || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-4">
+              {monthEntries.map((entry, index) => (
+                <div
+                  key={entry.id || `${entry.date}-${entry.serviceType}-${index}`}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                >
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Date
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {entry.date || '—'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Service Type
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {entry.serviceType || '—'}
+                      </p>
+                    </div>
+
+                    {showStudent && (
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Student
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-slate-900">
+                          {entry.student || '—'}
+                        </p>
+                      </div>
+                    )}
+
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Hours
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {Number(entry.hours || 0).toFixed(2)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Client Rate
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {formatCurrency(Number(entry.hourlyRate || 0))}/hr
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Client Total
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {formatCurrency(Number(entry.totalPay || 0))}
+                      </p>
+                    </div>
+
+                    {showInternalTotals && (
+                      <>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Internal Rate
+                          </p>
+                          <p className="mt-1 text-sm font-medium text-slate-900">
+                            {formatCurrency(Number(entry.internalRate || 0))}/hr
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Internal Total
+                          </p>
+                          <p className="mt-1 text-sm font-medium text-slate-900">
+                            {formatCurrency(Number(entry.internalTotal || 0))}
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="mt-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Note
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">
+                      {entry.note || '—'}
+                    </p>
+                  </div>
+
+                  {entry.userName && (
+                    <div className="mt-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Staff Member
+                      </p>
+                      <p className="mt-1 text-sm text-slate-700">{entry.userName}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </section>
         );

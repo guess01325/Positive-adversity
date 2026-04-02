@@ -72,6 +72,8 @@ export default function DashboardPage() {
         <EntriesByMonth
           entries={entries}
           emptyMessage="No work sessions logged yet for this account."
+          showStudent={true}
+          showInternalTotals={false}
         />
       )}
     </div>
