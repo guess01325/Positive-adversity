@@ -4,6 +4,7 @@ import {
   signInWithPopup,
   signOut,
 } from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
 import { auth, googleProvider } from '../lib/firebase';
 import { getUserRole, upsertUserProfile } from '../lib/firestore';
 import { isAdminEmail } from '../lib/utils';
@@ -36,6 +37,12 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function signInWithGoogle() {
+    const isNative = Capacitor.isNativePlatform();
+
+    if (isNative) {
+      throw new Error('Google sign-in is not set up for the native mobile flow yet.');
+    }
+
     await signInWithPopup(auth, googleProvider);
   }
 
