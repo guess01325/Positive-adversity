@@ -7,27 +7,35 @@ const linkClasses = ({ isActive }) =>
   }`;
 
 export default function Layout() {
-  const { user, role, logOut } = useAuth();
+  const { user, logOut } = useAuth();
+
+  const displayName = user?.displayName || 'Not signed in';
+  const email = user?.email || '';
 
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Positive Adversity</p>
-            <h1 className="text-lg font-bold text-slate-900">Time, notes, and payroll tracking</h1>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Positive Adversity
+            </p>
+            <h1 className="text-lg font-bold text-slate-900">
+              Time, notes, and payroll tracking
+            </h1>
           </div>
 
           <div className="flex items-center gap-3">
             <div className="hidden text-right sm:block">
-              <p className="text-sm font-semibold text-slate-900">{user?.displayName}</p>
-              <p className="text-xs text-slate-500">{user?.email}</p>
+              <p className="text-sm font-semibold text-slate-900">{displayName}</p>
+              <p className="text-xs text-slate-500">{email}</p>
             </div>
+
             <button
               onClick={logOut}
-              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
             >
-              Sign out
+              Log out
             </button>
           </div>
         </div>
@@ -42,11 +50,6 @@ export default function Layout() {
             <NavLink to="/profile" className={linkClasses}>
               My profile
             </NavLink>
-            {role === 'admin' && (
-              <NavLink to="/admin" className={linkClasses}>
-                Admin
-              </NavLink>
-            )}
           </nav>
         </aside>
 

@@ -16,7 +16,7 @@ export default function EntryForm({ onSubmit, submitting }) {
 
   const hours = useMemo(
     () => calculateHours(form.startTime, form.endTime),
-    [form.startTime, form.endTime],
+    [form.startTime, form.endTime]
   );
 
   const selectedRates = SERVICE_RATES[form.serviceType];
@@ -26,7 +26,7 @@ export default function EntryForm({ onSubmit, submitting }) {
   const totalPay = useMemo(() => clientRate * hours, [clientRate, hours]);
   const internalTotal = useMemo(
     () => internalRate * hours,
-    [internalRate, hours],
+    [internalRate, hours]
   );
 
   function updateField(event) {
@@ -48,8 +48,24 @@ export default function EntryForm({ onSubmit, submitting }) {
       monthKey: toMonthKey(form.date),
     };
 
-    await onSubmit(payload);
-    setForm((current) => ({ ...initialState, date: current.date }));
+    console.log("FORM handleSubmit START", payload);
+
+    try {
+      console.log("FORM before onSubmit");
+      await onSubmit(payload);
+      console.log("FORM after onSubmit");
+
+      setForm((current) => ({
+        ...initialState,
+        date: current.date,
+      }));
+
+      console.log("FORM reset complete");
+    } catch (error) {
+      console.error("FORM handleSubmit ERROR", error);
+    } finally {
+      console.log("FORM handleSubmit FINALLY");
+    }
   }
 
   return (
@@ -63,6 +79,7 @@ export default function EntryForm({ onSubmit, submitting }) {
             Log the day, time, note, student, and calculated pay.
           </p>
         </div>
+
         <div className="rounded-2xl bg-slate-100 px-4 py-3 text-right">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             Live total
@@ -75,12 +92,18 @@ export default function EntryForm({ onSubmit, submitting }) {
 
       <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
         <div>
-          <label htmlFor="serviceType">Service type</label>
+          <label
+            htmlFor="serviceType"
+            className="mb-2 block text-sm font-medium text-slate-700"
+          >
+            Service type
+          </label>
           <select
             id="serviceType"
             name="serviceType"
             value={form.serviceType}
             onChange={updateField}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           >
             {SERVICE_OPTIONS.map((option) => (
               <option key={option} value={option}>
@@ -91,7 +114,12 @@ export default function EntryForm({ onSubmit, submitting }) {
         </div>
 
         <div>
-          <label htmlFor="date">Date</label>
+          <label
+            htmlFor="date"
+            className="mb-2 block text-sm font-medium text-slate-700"
+          >
+            Date
+          </label>
           <input
             id="date"
             name="date"
@@ -99,11 +127,17 @@ export default function EntryForm({ onSubmit, submitting }) {
             value={form.date}
             onChange={updateField}
             required
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           />
         </div>
 
         <div>
-          <label htmlFor="startTime">Start time</label>
+          <label
+            htmlFor="startTime"
+            className="mb-2 block text-sm font-medium text-slate-700"
+          >
+            Start time
+          </label>
           <input
             id="startTime"
             name="startTime"
@@ -111,11 +145,17 @@ export default function EntryForm({ onSubmit, submitting }) {
             value={form.startTime}
             onChange={updateField}
             required
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           />
         </div>
 
         <div>
-          <label htmlFor="endTime">End time</label>
+          <label
+            htmlFor="endTime"
+            className="mb-2 block text-sm font-medium text-slate-700"
+          >
+            End time
+          </label>
           <input
             id="endTime"
             name="endTime"
@@ -123,11 +163,17 @@ export default function EntryForm({ onSubmit, submitting }) {
             value={form.endTime}
             onChange={updateField}
             required
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           />
         </div>
 
         <div className="md:col-span-2">
-          <label htmlFor="student">Student</label>
+          <label
+            htmlFor="student"
+            className="mb-2 block text-sm font-medium text-slate-700"
+          >
+            Student
+          </label>
           <input
             id="student"
             name="student"
@@ -135,11 +181,17 @@ export default function EntryForm({ onSubmit, submitting }) {
             value={form.student}
             onChange={updateField}
             placeholder="Enter student name"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           />
         </div>
 
         <div className="md:col-span-2">
-          <label htmlFor="note">Note</label>
+          <label
+            htmlFor="note"
+            className="mb-2 block text-sm font-medium text-slate-700"
+          >
+            Note
+          </label>
           <textarea
             id="note"
             name="note"
@@ -149,8 +201,9 @@ export default function EntryForm({ onSubmit, submitting }) {
             placeholder="Add session notes..."
             maxLength={10000}
             required
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           />
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="mt-1 text-xs text-slate-400">
             {form.note.length}/10000 characters
           </p>
         </div>
@@ -165,6 +218,7 @@ export default function EntryForm({ onSubmit, submitting }) {
                 {hours.toFixed(2)}
               </p>
             </div>
+
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Rate
@@ -173,6 +227,7 @@ export default function EntryForm({ onSubmit, submitting }) {
                 ${clientRate}/hr
               </p>
             </div>
+
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Month bucket

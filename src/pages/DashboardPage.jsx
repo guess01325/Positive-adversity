@@ -11,41 +11,73 @@ export default function DashboardPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid) {
+      console.log('loadEntries aborted: no user uid');
+      setLoading(false);
+      return;
+    }
 
     async function loadEntries() {
       try {
+        console.log('loadEntries START', {
+          uid: user.uid,
+          email: user.email,
+        });
+
         setLoading(true);
         const data = await fetchEntriesByUser(user.uid);
+        console.log('loadEntries SUCCESS', data);
         setEntries(data);
       } catch (error) {
         console.error('Failed to load entries:', error);
+        alert(error?.message || 'Failed to load entries');
       } finally {
+        console.log('loadEntries FINALLY');
         setLoading(false);
       }
     }
 
     loadEntries();
-  }, [user?.uid]);
+  }, [user?.uid, user?.email]);
 
   async function handleCreateEntry(payload) {
-    if (!user?.uid) return;
+    if (!user?.uid) {
+      console.log('handleCreateEntry aborted: no user uid');
+      return;
+    }
 
     try {
+      console.log('handleCreateEntry START', payload);
       setSaving(true);
 
-      await createEntry({
+      const entryToCreate = {
         ...payload,
         userId: user.uid,
-        userEmail: user.email,
+        userEmail: user.email || '',
         userName: user.displayName || '',
-      });
+      };
 
-      const data = await fetchEntriesByUser(user.uid);
-      setEntries(data);
+      console.log('handleCreateEntry BEFORE createEntry', entryToCreate);
+      console.log('ENTRY JSON', JSON.stringify(entryToCreate));
+
+      const created = await createEntry(entryToCreate);
+
+      console.log('handleCreateEntry AFTER createEntry', created);
+
+      setEntries((current) => [
+        {
+          id: created.id,
+          ...entryToCreate,
+        },
+        ...current,
+      ]);
+
+      console.log('handleCreateEntry setEntries complete');
     } catch (error) {
       console.error('Failed to create entry:', error);
+      alert(error?.message || 'Failed to save entry');
     } finally {
+      console.log('handleCreateEntry FINALLY');
       setSaving(false);
     }
   }

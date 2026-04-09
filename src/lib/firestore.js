@@ -13,6 +13,14 @@ import {
 import { db } from './firebase';
 import { isAdminEmail } from './utils';
 
+import { disableNetwork, enableNetwork } from "firebase/firestore";
+
+setTimeout(() => {
+  enableNetwork(db).then(() => {
+    console.log("Firestore network ENABLED");
+  }).catch(console.error);
+}, 1000);
+
 export async function upsertUserProfile(user) {
   const userRef = doc(db, 'users', user.uid);
   const existing = await getDoc(userRef);
@@ -55,10 +63,21 @@ export async function getUserRole(uid) {
 }
 
 export async function createEntry(entry) {
-  return addDoc(collection(db, 'entries'), {
-    ...entry,
-    createdAt: serverTimestamp(),
-  });
+  console.log("createEntry START", entry);
+
+  try {
+    const docRef = await addDoc(collection(db, "entries"), {
+      ...entry,
+      createdAt: serverTimestamp(),
+    });
+
+    console.log("createEntry SUCCESS", docRef.id);
+
+    return { id: docRef.id };
+  } catch (error) {
+    console.error("createEntry ERROR", error);
+    throw error;
+  }
 }
 
 export async function fetchEntriesByUser(uid) {

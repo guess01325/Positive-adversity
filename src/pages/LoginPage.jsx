@@ -1,31 +1,27 @@
-import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function LoginPage() {
-  const { user, signInWithGoogle, loading } = useAuth();
-
-  if (!loading && user) {
-    return <Navigate to="/dashboard" replace />;
-  }
+  const { signInWithGoogle, loading } = useAuth();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-12">
-      <div className="w-full max-w-lg rounded-3xl border border-slate-800 bg-white p-8 shadow-2xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Positive Adversity</p>
-        <h1 className="mt-3 text-3xl font-bold text-slate-900">Sign in to manage notes, hours, and payroll.</h1>
-        <p className="mt-3 text-sm text-slate-600">
-          This first version includes Google login, monthly tracking, personal history, and an HR admin view.
+    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+          Positive Adversity
         </p>
-
-        <div className="mt-8 rounded-2xl bg-slate-100 p-5">
-          <p className="text-sm text-slate-700">Use your approved Google account to enter session notes and keep payroll totals organized by month.</p>
-        </div>
+        <h1 className="mb-3 text-2xl font-bold text-slate-900">
+          Sign in to continue
+        </h1>
+        <p className="mb-6 text-sm text-slate-600">
+          Use your Google account to access your dashboard, entries, and profile.
+        </p>
 
         <button
           onClick={signInWithGoogle}
-          className="mt-8 inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+          disabled={loading}
+          className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Continue with Google
+          {loading ? 'Signing in...' : 'Continue with Google'}
         </button>
       </div>
     </div>
