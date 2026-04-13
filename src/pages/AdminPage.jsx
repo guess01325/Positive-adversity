@@ -1,12 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import EntriesByMonth from '../components/EntriesByMonth';
-import { useAuth } from '../contexts/AuthContext';
-import {
-  deleteEntry,
-  fetchAllEntries,
-  updateEntry,
-} from '../lib/firestore';
-import { exportEntriesPdf } from '../lib/exportReportPdf';
+import { useEffect, useMemo, useState } from "react";
+import EntriesByMonth from "../components/EntriesByMonth";
+import { useAuth } from "../contexts/AuthContext";
+import { deleteEntry, fetchAllEntries, updateEntry } from "../lib/firestore";
+import { exportEntriesPdf } from "../lib/exportReportPdf";
 
 export default function AdminPage() {
   const { user, role, isAdmin } = useAuth();
@@ -14,16 +10,16 @@ export default function AdminPage() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [selectedUser, setSelectedUser] = useState('all');
-  const [selectedMonth, setSelectedMonth] = useState('all');
-  const [studentSearch, setStudentSearch] = useState('');
+  const [selectedUser, setSelectedUser] = useState("all");
+  const [selectedMonth, setSelectedMonth] = useState("all");
+  const [studentSearch, setStudentSearch] = useState("");
 
   const [editingEntry, setEditingEntry] = useState(null);
   const [editForm, setEditForm] = useState({
-    student: '',
-    serviceType: '',
-    hours: '',
-    note: '',
+    student: "",
+    serviceType: "",
+    hours: "",
+    note: "",
   });
   const [savingEdit, setSavingEdit] = useState(false);
 
@@ -34,14 +30,14 @@ export default function AdminPage() {
         const data = await fetchAllEntries();
         setEntries(data);
       } catch (error) {
-        console.error('Failed to load admin entries:', error);
-        alert(error?.message || 'Failed to load admin entries');
+        console.error("Failed to load admin entries:", error);
+        alert(error?.message || "Failed to load admin entries");
       } finally {
         setLoading(false);
       }
     }
 
-    if (isAdmin || role === 'admin') {
+    if (isAdmin || role === "admin") {
       loadEntries();
     } else {
       setLoading(false);
@@ -52,7 +48,7 @@ export default function AdminPage() {
     const map = new Map();
 
     entries.forEach((entry) => {
-      const key = entry.userId || '';
+      const key = entry.userId || "";
       if (!key) return;
 
       if (!map.has(key)) {
@@ -64,13 +60,13 @@ export default function AdminPage() {
     });
 
     return Array.from(map.values()).sort((a, b) =>
-      a.label.localeCompare(b.label)
+      a.label.localeCompare(b.label),
     );
   }, [entries]);
 
   const monthOptions = useMemo(() => {
     const months = Array.from(
-      new Set(entries.map((entry) => entry.monthKey).filter(Boolean))
+      new Set(entries.map((entry) => entry.monthKey).filter(Boolean)),
     );
 
     return months.sort((a, b) => b.localeCompare(a));
@@ -79,14 +75,14 @@ export default function AdminPage() {
   const filteredEntries = useMemo(() => {
     return entries.filter((entry) => {
       const matchesUser =
-        selectedUser === 'all' || entry.userId === selectedUser;
+        selectedUser === "all" || entry.userId === selectedUser;
 
       const matchesMonth =
-        selectedMonth === 'all' || entry.monthKey === selectedMonth;
+        selectedMonth === "all" || entry.monthKey === selectedMonth;
 
       const matchesStudent =
         !studentSearch.trim() ||
-        (entry.student || '')
+        (entry.student || "")
           .toLowerCase()
           .includes(studentSearch.toLowerCase().trim());
 
@@ -95,53 +91,46 @@ export default function AdminPage() {
   }, [entries, selectedUser, selectedMonth, studentSearch]);
 
   const selectedUserLabel =
-    selectedUser === 'all'
-      ? 'All Users'
+    selectedUser === "all"
+      ? "All Users"
       : userOptions.find((option) => option.userId === selectedUser)?.label ||
-        'Selected User';
+        "Selected User";
 
-function handleDownloadPdf() {
-  const isNative =
-    typeof window !== 'undefined' &&
-    window?.Capacitor?.isNativePlatform?.();
-
-  if (isNative) {
-    alert(
-      'PDF export is available in the web admin view right now. I am finishing direct mobile PDF handling next.'
-    );
-    return;
+  async function handleDownloadPdf() {
+    try {
+      await exportEntriesPdf({
+        entries: filteredEntries,
+        selectedMonth,
+        visibleUserLabel: selectedUserLabel,
+      });
+    } catch (error) {
+      console.error("PDF export failed:", error);
+      alert(error?.message || "PDF export failed.");
+    }
   }
-
-  exportEntriesPdf({
-    entries: filteredEntries,
-    selectedUser,
-    selectedMonth,
-    visibleUserLabel: selectedUserLabel,
-  });
-}
 
   function handleEdit(entry) {
     setEditingEntry(entry);
     setEditForm({
-      student: entry.student || '',
-      serviceType: entry.serviceType || '',
-      hours: String(entry.hours ?? ''),
-      note: entry.note || '',
+      student: entry.student || "",
+      serviceType: entry.serviceType || "",
+      hours: String(entry.hours ?? ""),
+      note: entry.note || "",
     });
 
     // helpful on mobile so user sees the form immediately
     setTimeout(() => {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }, 50);
   }
 
   function handleCancelEdit() {
     setEditingEntry(null);
     setEditForm({
-      student: '',
-      serviceType: '',
-      hours: '',
-      note: '',
+      student: "",
+      serviceType: "",
+      hours: "",
+      note: "",
     });
   }
 
@@ -150,7 +139,7 @@ function handleDownloadPdf() {
 
     const hours = Number(editForm.hours);
     if (Number.isNaN(hours) || hours < 0) {
-      alert('Please enter valid hours.');
+      alert("Please enter valid hours.");
       return;
     }
 
@@ -178,15 +167,15 @@ function handleDownloadPdf() {
                 ...entry,
                 ...updates,
               }
-            : entry
-        )
+            : entry,
+        ),
       );
 
-      alert('Entry updated successfully.');
+      alert("Entry updated successfully.");
       handleCancelEdit();
     } catch (error) {
-      console.error('Update failed:', error);
-      alert(error?.message || 'Failed to update entry.');
+      console.error("Update failed:", error);
+      alert(error?.message || "Failed to update entry.");
     } finally {
       setSavingEdit(false);
     }
@@ -194,7 +183,7 @@ function handleDownloadPdf() {
 
   async function handleDelete(entryId) {
     const confirmed = window.confirm(
-      'Are you sure you want to delete this entry?'
+      "Are you sure you want to delete this entry?",
     );
     if (!confirmed) return;
 
@@ -206,8 +195,8 @@ function handleDownloadPdf() {
         handleCancelEdit();
       }
     } catch (error) {
-      console.error('Delete failed:', error);
-      alert(error?.message || 'Failed to delete entry.');
+      console.error("Delete failed:", error);
+      alert(error?.message || "Failed to delete entry.");
     }
   }
 
@@ -219,7 +208,7 @@ function handleDownloadPdf() {
     );
   }
 
-  if (!isAdmin && role !== 'admin') {
+  if (!isAdmin && role !== "admin") {
     return (
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         You do not have access to this page.
@@ -232,7 +221,8 @@ function handleDownloadPdf() {
       <section className="rounded-2xl bg-gradient-to-r from-slate-900 to-slate-700 p-6 text-white shadow-sm">
         <h2 className="text-2xl font-bold">Admin Dashboard</h2>
         <p className="mt-2 max-w-2xl text-sm text-slate-200">
-          Review all work sessions, search by student, manage entries, and download reports.
+          Review all work sessions, search by student, manage entries, and
+          download reports.
         </p>
       </section>
 
@@ -240,7 +230,9 @@ function handleDownloadPdf() {
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-lg font-semibold text-slate-900">Edit Entry</h3>
+              <h3 className="text-lg font-semibold text-slate-900">
+                Edit Entry
+              </h3>
               <p className="mt-1 text-sm text-slate-500">
                 Update the selected entry and save changes.
               </p>
@@ -324,7 +316,7 @@ function handleDownloadPdf() {
               disabled={savingEdit}
               className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {savingEdit ? 'Saving...' : 'Save Changes'}
+              {savingEdit ? "Saving..." : "Save Changes"}
             </button>
 
             <button

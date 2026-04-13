@@ -1,6 +1,8 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 function formatCurrency(value) {
   return new Intl.NumberFormat('en-US', {
@@ -121,9 +123,8 @@ function buildDoc({
   return doc;
 }
 
-export function exportEntriesPdf({
+export async function exportEntriesPdf({
   entries = [],
-  selectedUser = 'all',
   selectedMonth = 'all',
   visibleUserLabel = 'All Users',
 }) {
@@ -138,30 +139,37 @@ export function exportEntriesPdf({
 
   const filename = `positive_adversity_report_${safeUser || 'all_users'}_${safeMonth}.pdf`;
 
+  // Web / desktop
   if (!Capacitor.isNativePlatform()) {
     doc.save(filename);
     return;
   }
 
-  // Mobile fallback: open the PDF in a new browser view/tab if possible.
-  // This is safer than native filesystem/share while your Android toolchain is unstable.
-  const blob = doc.output('blob');
-  const url = URL.createObjectURL(blob);
+  // Native mobile: write to cache, then share/open
+  const dataUri = doc.output('datauristring');
+  const base64 = dataUri.split(',')[1];
 
-  try {
-    const opened = window.open(url, '_blank');
+  await Filesystem.writeFile({
+    path: filename,
+    data: base64,
+    directory: Directory.Cache,
+  });
 
-    if (!opened) {
-      const link = document.createElement('a');
-      link.href = url;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  } finally {
-    setTimeout(() => URL.revokeObjectURL(url), 15000);
+  const fileInfo = await Filesystem.getUri({
+    path: filename,
+    directory: Directory.Cache,
+  });
+
+  const canShare = await Share.canShare();
+
+  if (!canShare.value) {
+    throw new Error('Sharing is not supported on this device.');
   }
+
+  await Share.share({
+    title: 'Positive Adversity Report',
+    text: 'PDF report ready',
+    url: fileInfo.uri,
+    dialogTitle: 'Open or share PDF',
+  });
 }
