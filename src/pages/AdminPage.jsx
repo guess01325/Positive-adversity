@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import EntriesByMonth from '../components/EntriesByMonth';
 import { useAuth } from '../contexts/AuthContext';
-import { deleteEntry, fetchAllEntries, updateEntry } from '../lib/firestore';
+import {
+  deleteEntry,
+  fetchAllEntries,
+  updateEntry,
+} from '../lib/firestore';
+import { exportEntriesPdf } from '../lib/exportReportPdf';
 
 export default function AdminPage() {
   const { user, role, isAdmin } = useAuth();
@@ -88,6 +93,21 @@ export default function AdminPage() {
       return matchesUser && matchesMonth && matchesStudent;
     });
   }, [entries, selectedUser, selectedMonth, studentSearch]);
+
+  const selectedUserLabel =
+    selectedUser === 'all'
+      ? 'All Users'
+      : userOptions.find((option) => option.userId === selectedUser)?.label ||
+        'Selected User';
+
+  function handleDownloadPdf() {
+    exportEntriesPdf({
+      entries: filteredEntries,
+      selectedUser,
+      selectedMonth,
+      visibleUserLabel: selectedUserLabel,
+    });
+  }
 
   function handleEdit(entry) {
     setEditingEntry(entry);
@@ -195,7 +215,7 @@ export default function AdminPage() {
       <section className="rounded-2xl bg-gradient-to-r from-slate-900 to-slate-700 p-6 text-white shadow-sm">
         <h2 className="text-2xl font-bold">Admin Dashboard</h2>
         <p className="mt-2 max-w-2xl text-sm text-slate-200">
-          Review all work sessions, search by student, and manage entries.
+          Review all work sessions, search by student, manage entries, and download reports.
         </p>
       </section>
 
@@ -234,6 +254,17 @@ export default function AdminPage() {
             onChange={(e) => setStudentSearch(e.target.value)}
             className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
           />
+        </div>
+
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={!filteredEntries.length}
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Download PDF
+          </button>
         </div>
       </section>
 
