@@ -1,3 +1,4 @@
+
 import { useMemo } from 'react';
 import { formatCurrency } from '../lib/utils';
 
@@ -6,6 +7,9 @@ export default function EntriesByMonth({
   emptyMessage = 'No entries found.',
   showInternalTotals = false,
   showStudent = false,
+  showAdminActions = false,
+  onEdit,
+  onDelete,
 }) {
   const groupedEntries = useMemo(() => {
     const groups = entries.reduce((acc, entry) => {
@@ -41,7 +45,7 @@ export default function EntriesByMonth({
             acc.count += 1;
             return acc;
           },
-          { hours: 0, clientPay: 0, internalPay: 0, count: 0 },
+          { hours: 0, clientPay: 0, internalPay: 0, count: 0 }
         );
 
         return (
@@ -181,6 +185,26 @@ export default function EntriesByMonth({
                         Staff Member
                       </p>
                       <p className="mt-1 text-sm text-slate-700">{entry.userName}</p>
+                    </div>
+                  )}
+
+                  {showAdminActions && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onEdit?.(entry)}
+                        className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                      >
+                        Edit
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onDelete?.(entry.id)}
+                        className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700"
+                      >
+                        Delete
+                      </button>
                     </div>
                   )}
                 </div>

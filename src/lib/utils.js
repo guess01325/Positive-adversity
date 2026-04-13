@@ -52,12 +52,12 @@ export function groupEntriesByMonth(entries) {
   }, {});
 }
 
+
+const ADMIN_EMAILS = ['guess01325@gmail.com'];
+
 export function isAdminEmail(email) {
   if (!email) return false;
-  const raw = import.meta.env.VITE_ADMIN_EMAILS || '';
-  const admins = raw
-    .split(',')
-    .map((item) => item.trim().toLowerCase())
-    .filter(Boolean);
-  return admins.includes(email.toLowerCase());
+  return ADMIN_EMAILS.includes(email.toLowerCase().trim());
 }
+
+

@@ -1,78 +1,60 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
   onAuthStateChanged,
   signInWithPopup,
   signInWithCredential,
   GoogleAuthProvider,
   signOut,
-} from "firebase/auth";
-import { Capacitor } from "@capacitor/core";
-import { GoogleSignIn } from "@capawesome/capacitor-google-sign-in";
-import { auth, googleProvider } from "../lib/firebase";
-import { isAdminEmail } from "../lib/utils";
+} from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
+import { GoogleSignIn } from '@capawesome/capacitor-google-sign-in';
+import { auth, googleProvider } from '../lib/firebase';
+import { isAdminEmail } from '../lib/utils';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [role, setRole] = useState("user");
+  const [role, setRole] = useState('user');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const initGoogle = async () => {
-      try {
-        if (Capacitor.isNativePlatform()) {
-          console.log(
-            "WEB CLIENT ID EXISTS?",
-            !!import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID
-          );
-          console.log(
-            "WEB CLIENT ID:",
-            import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID
-          );
+  async function initNativeGoogle() {
+    try {
+      if (Capacitor.isNativePlatform()) {
+        console.log('Initializing native Google Sign-In');
 
-          await GoogleSignIn.initialize({
-            clientId: import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID,
-          });
-
-          console.log("GoogleSignIn initialized");
-        }
-      } catch (error) {
-        console.error("GoogleSignIn init failed:", error);
+        await GoogleSignIn.initialize({
+          clientId: import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID,
+          
+        });
+        
+        console.log('Native Google Sign-In initialized');
       }
-    };
+    } catch (error) {
+      console.error('GoogleSignIn initialize ERROR', error);
+    }
+  }
+  
+  initNativeGoogle();
+}, []);
 
-    initGoogle();
-  }, []);
+console.log('WEB CLIENT ID', import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID);
+useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      console.log('onAuthStateChanged fired', currentUser);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      try {
-        console.log("onAuthStateChanged fired", currentUser);
-
-        if (!currentUser) {
-          console.log("No current user, clearing auth state");
-          setUser(null);
-          setRole("user");
-          setLoading(false);
-          return;
-        }
-
-        const admin = isAdminEmail(currentUser.email);
-
-        // render app immediately
-        setUser(currentUser);
-        setRole(admin ? "admin" : "user");
+      if (!currentUser) {
+        setUser(null);
+        setRole('user');
         setLoading(false);
-
-        // TEMPORARILY skip Firestore profile sync
-        console.log("AuthContext skipping Firestore profile sync temporarily");
-      } catch (error) {
-        console.error("AuthContext error FULL:", error);
-        setUser(currentUser || null);
-        setRole("user");
-        setLoading(false);
+        return;
       }
+
+      const adminByEmail = isAdminEmail(currentUser.email);
+      setUser(currentUser);
+      setRole(adminByEmail ? 'admin' : 'user');
+      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -80,60 +62,47 @@ export function AuthProvider({ children }) {
 
   async function signInWithGoogle() {
     try {
-      console.log("signInWithGoogle START");
+      setLoading(true);
 
       if (Capacitor.isNativePlatform()) {
-        console.log("Native platform detected");
+        console.log('Using native Google sign-in');
 
         const result = await GoogleSignIn.signIn();
-        console.log("Native Google result:", result);
-
-        const idToken = result?.authentication?.idToken || result?.idToken;
-        console.log("Native Google idToken exists?", !!idToken);
+        const idToken = result.authentication?.idToken || result.idToken;
 
         if (!idToken) {
-          throw new Error("No Google ID token returned from plugin.");
+          throw new Error('Missing Google ID token from native sign-in.');
         }
 
         const credential = GoogleAuthProvider.credential(idToken);
-        console.log("Firebase credential created");
+        const firebaseResult = await signInWithCredential(auth, credential);
 
-        await signInWithCredential(auth, credential);
-        console.log("Firebase native sign-in success");
-        return;
+        return firebaseResult.user;
       }
 
-      console.log("Using web popup sign-in");
-      await signInWithPopup(auth, googleProvider);
-      console.log("Firebase web popup success");
-    } catch (error) {
-      console.error("Google sign-in failed:", error);
-      alert(error?.message || "Google sign-in failed");
+      console.log('Using web popup sign-in');
+      const result = await signInWithPopup(auth, googleProvider);
+      return result.user;
+    } finally {
+      setLoading(false);
     }
   }
 
-  async function logOut() {
-    try {
-      console.log("logOut START");
-
-      if (Capacitor.isNativePlatform()) {
-        try {
-          await GoogleSignIn.signOut();
-          console.log("Native Google signOut success");
-        } catch (error) {
-          console.warn("Native Google signOut warning:", error);
-        }
-      }
-
-      await signOut(auth);
-      console.log("Firebase signOut success");
-    } catch (error) {
-      console.error("Logout failed:", error);
-    }
+  async function logout() {
+    console.log('logout START');
+    await signOut(auth);
+    console.log('logout SUCCESS');
   }
 
   const value = useMemo(
-    () => ({ user, role, loading, signInWithGoogle, logOut }),
+    () => ({
+      user,
+      role,
+      isAdmin: role === 'admin',
+      loading,
+      signInWithGoogle,
+      logout,
+    }),
     [user, role, loading]
   );
 
@@ -143,7 +112,7 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error("useAuth must be used inside AuthProvider");
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 }

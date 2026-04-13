@@ -1,113 +1,357 @@
-import { useEffect, useState } from 'react';
-import EntryForm from '../components/EntryForm';
+import { useEffect, useMemo, useState } from 'react';
 import EntriesByMonth from '../components/EntriesByMonth';
 import { useAuth } from '../contexts/AuthContext';
-import { createEntry, fetchEntriesByUser } from '../lib/firestore';
+import { deleteEntry, fetchAllEntries, updateEntry } from '../lib/firestore';
 
-export default function DashboardPage() {
-  const { user } = useAuth();
+export default function AdminPage() {
+  const { user, role, isAdmin } = useAuth();
+
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+
+  const [selectedUser, setSelectedUser] = useState('all');
+  const [selectedMonth, setSelectedMonth] = useState('all');
+  const [studentSearch, setStudentSearch] = useState('');
+
+  const [editingEntry, setEditingEntry] = useState(null);
+  const [editForm, setEditForm] = useState({
+    student: '',
+    serviceType: '',
+    hours: '',
+    note: '',
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
-    if (!user?.uid) {
-      console.log('loadEntries aborted: no user uid');
-      setLoading(false);
-      return;
-    }
-
     async function loadEntries() {
       try {
-        console.log('loadEntries START', {
-          uid: user.uid,
-          email: user.email,
-        });
-
         setLoading(true);
-
-        const data = await fetchEntriesByUser(user.uid);
-
-        console.log('loadEntries SUCCESS', data);
+        const data = await fetchAllEntries();
         setEntries(data);
       } catch (error) {
-        console.error('Failed to load entries:', error);
-        alert(error?.message || 'Failed to load entries');
+        console.error('Failed to load admin entries:', error);
+        alert(error?.message || 'Failed to load admin entries');
       } finally {
-        console.log('loadEntries FINALLY');
         setLoading(false);
       }
     }
 
-    loadEntries();
-  }, [user?.uid, user?.email]);
+    if (isAdmin || role === 'admin') {
+      loadEntries();
+    } else {
+      setLoading(false);
+    }
+  }, [isAdmin, role]);
 
-  async function handleCreateEntry(payload) {
-    if (!user?.uid) {
-      console.log('handleCreateEntry aborted: no user uid');
+  const userOptions = useMemo(() => {
+    const map = new Map();
+
+    entries.forEach((entry) => {
+      const key = entry.userId || '';
+      if (!key) return;
+
+      if (!map.has(key)) {
+        map.set(key, {
+          userId: key,
+          label: entry.userName || entry.userEmail || key,
+        });
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) =>
+      a.label.localeCompare(b.label)
+    );
+  }, [entries]);
+
+  const monthOptions = useMemo(() => {
+    const months = Array.from(
+      new Set(entries.map((entry) => entry.monthKey).filter(Boolean))
+    );
+
+    return months.sort((a, b) => b.localeCompare(a));
+  }, [entries]);
+
+  const filteredEntries = useMemo(() => {
+    return entries.filter((entry) => {
+      const matchesUser =
+        selectedUser === 'all' || entry.userId === selectedUser;
+
+      const matchesMonth =
+        selectedMonth === 'all' || entry.monthKey === selectedMonth;
+
+      const matchesStudent =
+        !studentSearch.trim() ||
+        (entry.student || '')
+          .toLowerCase()
+          .includes(studentSearch.toLowerCase().trim());
+
+      return matchesUser && matchesMonth && matchesStudent;
+    });
+  }, [entries, selectedUser, selectedMonth, studentSearch]);
+
+  function handleEdit(entry) {
+    setEditingEntry(entry);
+    setEditForm({
+      student: entry.student || '',
+      serviceType: entry.serviceType || '',
+      hours: String(entry.hours ?? ''),
+      note: entry.note || '',
+    });
+  }
+
+  function handleCancelEdit() {
+    setEditingEntry(null);
+    setEditForm({
+      student: '',
+      serviceType: '',
+      hours: '',
+      note: '',
+    });
+  }
+
+  async function handleSaveEdit() {
+    if (!editingEntry) return;
+
+    const hours = Number(editForm.hours);
+    if (Number.isNaN(hours) || hours < 0) {
+      alert('Please enter valid hours.');
       return;
     }
 
     try {
-      console.log('handleCreateEntry START', payload);
-      setSaving(true);
+      setSavingEdit(true);
 
-      const entryToCreate = {
-        ...payload,
-        userId: user.uid,
-        userEmail: user.email || '',
-        userName: user.displayName || '',
+      const hourlyRate = Number(editingEntry.hourlyRate || 0);
+      const internalRate = Number(editingEntry.internalRate || 0);
+
+      const updates = {
+        student: editForm.student.trim(),
+        serviceType: editForm.serviceType.trim(),
+        hours,
+        note: editForm.note.trim(),
+        totalPay: hours * hourlyRate,
+        internalTotal: hours * internalRate,
       };
 
-      console.log('handleCreateEntry BEFORE createEntry', entryToCreate);
-      console.log('ENTRY JSON', JSON.stringify(entryToCreate));
+      await updateEntry(editingEntry.id, updates);
 
-      const created = await createEntry(entryToCreate);
+      setEntries((prev) =>
+        prev.map((entry) =>
+          entry.id === editingEntry.id
+            ? {
+                ...entry,
+                ...updates,
+              }
+            : entry
+        )
+      );
 
-      console.log('handleCreateEntry AFTER createEntry', created);
-
-      setEntries((current) => [
-        {
-          id: created.id,
-          ...entryToCreate,
-        },
-        ...current,
-      ]);
-
-      console.log('handleCreateEntry setEntries complete');
+      handleCancelEdit();
     } catch (error) {
-      console.error('Failed to create entry:', error);
-      alert(error?.message || 'Failed to save entry');
+      console.error('Update failed:', error);
+      alert(error?.message || 'Failed to update entry.');
     } finally {
-      console.log('handleCreateEntry FINALLY');
-      setSaving(false);
+      setSavingEdit(false);
     }
+  }
+
+  async function handleDelete(entryId) {
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this entry?'
+    );
+    if (!confirmed) return;
+
+    try {
+      await deleteEntry(entryId);
+      setEntries((prev) => prev.filter((entry) => entry.id !== entryId));
+
+      if (editingEntry?.id === entryId) {
+        handleCancelEdit();
+      }
+    } catch (error) {
+      console.error('Delete failed:', error);
+      alert(error?.message || 'Failed to delete entry.');
+    }
+  }
+
+  if (!user) {
+    return (
+      <section className="rounded-2xl bg-white p-6 shadow-sm">
+        You must be signed in to view this page.
+      </section>
+    );
+  }
+
+  if (!isAdmin && role !== 'admin') {
+    return (
+      <section className="rounded-2xl bg-white p-6 shadow-sm">
+        You do not have access to this page.
+      </section>
+    );
   }
 
   return (
     <div className="space-y-6">
       <section className="rounded-2xl bg-gradient-to-r from-slate-900 to-slate-700 p-6 text-white shadow-sm">
-        <h2 className="text-2xl font-bold">
-          Welcome back, {user?.displayName?.split(' ')[0] || 'User'}
-        </h2>
+        <h2 className="text-2xl font-bold">Admin Dashboard</h2>
         <p className="mt-2 max-w-2xl text-sm text-slate-200">
-          Track your work sessions, store the notes for each visit, and keep
-          your monthly totals ready for payroll.
+          Review all work sessions, search by student, and manage entries.
         </p>
       </section>
 
-      <EntryForm onSubmit={handleCreateEntry} submitting={saving} />
+      <section className="rounded-2xl bg-white p-4 shadow-sm">
+        <div className="grid gap-3 md:grid-cols-3">
+          <select
+            value={selectedUser}
+            onChange={(e) => setSelectedUser(e.target.value)}
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+          >
+            <option value="all">All Users</option>
+            {userOptions.map((option) => (
+              <option key={option.userId} value={option.userId}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+          >
+            <option value="all">All Months</option>
+            {monthOptions.map((month) => (
+              <option key={month} value={month}>
+                {month}
+              </option>
+            ))}
+          </select>
+
+          <input
+            type="text"
+            placeholder="Search by student"
+            value={studentSearch}
+            onChange={(e) => setStudentSearch(e.target.value)}
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+          />
+        </div>
+      </section>
+
+      {editingEntry && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Edit Entry</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Update the selected entry and save changes.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Student
+              </label>
+              <input
+                type="text"
+                value={editForm.student}
+                onChange={(e) =>
+                  setEditForm((prev) => ({ ...prev, student: e.target.value }))
+                }
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Service Type
+              </label>
+              <input
+                type="text"
+                value={editForm.serviceType}
+                onChange={(e) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    serviceType: e.target.value,
+                  }))
+                }
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Hours
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.25"
+                value={editForm.hours}
+                onChange={(e) =>
+                  setEditForm((prev) => ({ ...prev, hours: e.target.value }))
+                }
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Note
+              </label>
+              <textarea
+                rows={4}
+                value={editForm.note}
+                onChange={(e) =>
+                  setEditForm((prev) => ({ ...prev, note: e.target.value }))
+                }
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={handleSaveEdit}
+              disabled={savingEdit}
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {savingEdit ? 'Saving...' : 'Save Changes'}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
+      )}
 
       {loading ? (
         <section className="rounded-2xl bg-white p-6 shadow-sm">
-          Loading your entries...
+          Loading admin entries...
         </section>
       ) : (
         <EntriesByMonth
-          entries={entries}
-          emptyMessage="No work sessions logged yet for this account."
+          entries={filteredEntries}
+          emptyMessage="No matching work sessions found."
           showStudent={true}
-          showInternalTotals={false}
+          showInternalTotals={true}
+          showAdminActions={true}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
         />
       )}
     </div>
