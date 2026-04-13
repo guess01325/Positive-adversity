@@ -192,7 +192,7 @@ export default function EntriesByMonth({
                       <button
                         type="button"
                         onClick={() => onEdit?.(entry)}
-                        className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                        className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white"
                       >
                         Edit
                       </button>
@@ -200,7 +200,7 @@ export default function EntriesByMonth({
                       <button
                         type="button"
                         onClick={() => onDelete?.(entry.id)}
-                        className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700"
+                        className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white"
                       >
                         Delete
                       </button>

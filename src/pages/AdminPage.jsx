@@ -117,6 +117,11 @@ export default function AdminPage() {
       hours: String(entry.hours ?? ''),
       note: entry.note || '',
     });
+
+    // helpful on mobile so user sees the form immediately
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 50);
   }
 
   function handleCancelEdit() {
@@ -166,6 +171,7 @@ export default function AdminPage() {
         )
       );
 
+      alert('Entry updated successfully.');
       handleCancelEdit();
     } catch (error) {
       console.error('Update failed:', error);
@@ -217,55 +223,6 @@ export default function AdminPage() {
         <p className="mt-2 max-w-2xl text-sm text-slate-200">
           Review all work sessions, search by student, manage entries, and download reports.
         </p>
-      </section>
-
-      <section className="rounded-2xl bg-white p-4 shadow-sm">
-        <div className="grid gap-3 md:grid-cols-3">
-          <select
-            value={selectedUser}
-            onChange={(e) => setSelectedUser(e.target.value)}
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
-          >
-            <option value="all">All Users</option>
-            {userOptions.map((option) => (
-              <option key={option.userId} value={option.userId}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
-          >
-            <option value="all">All Months</option>
-            {monthOptions.map((month) => (
-              <option key={month} value={month}>
-                {month}
-              </option>
-            ))}
-          </select>
-
-          <input
-            type="text"
-            placeholder="Search by student"
-            value={studentSearch}
-            onChange={(e) => setStudentSearch(e.target.value)}
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div className="mt-4 flex justify-end">
-          <button
-            type="button"
-            onClick={handleDownloadPdf}
-            disabled={!filteredEntries.length}
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Download PDF
-          </button>
-        </div>
       </section>
 
       {editingEntry && (
@@ -369,6 +326,55 @@ export default function AdminPage() {
           </div>
         </section>
       )}
+
+      <section className="rounded-2xl bg-white p-4 shadow-sm">
+        <div className="grid gap-3 md:grid-cols-3">
+          <select
+            value={selectedUser}
+            onChange={(e) => setSelectedUser(e.target.value)}
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+          >
+            <option value="all">All Users</option>
+            {userOptions.map((option) => (
+              <option key={option.userId} value={option.userId}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+          >
+            <option value="all">All Months</option>
+            {monthOptions.map((month) => (
+              <option key={month} value={month}>
+                {month}
+              </option>
+            ))}
+          </select>
+
+          <input
+            type="text"
+            placeholder="Search by student"
+            value={studentSearch}
+            onChange={(e) => setStudentSearch(e.target.value)}
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+          />
+        </div>
+
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={!filteredEntries.length}
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Download PDF
+          </button>
+        </div>
+      </section>
 
       {loading ? (
         <section className="rounded-2xl bg-white p-6 shadow-sm">

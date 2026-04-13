@@ -131,9 +131,8 @@ export function exportEntriesPdf({
     .replace(/[^a-z0-9]+/gi, '_')
     .replace(/^_+|_+$/g, '');
 
-  const safeMonth =
-    (selectedMonth === 'all' ? 'all_months' : selectedMonth)
-      .replace(/[^a-z0-9_-]+/gi, '_');
+  const safeMonth = (selectedMonth === 'all' ? 'all_months' : selectedMonth)
+    .replace(/[^a-z0-9_-]+/gi, '_');
 
   const filename = `positive_adversity_report_${safeUser || 'all_users'}_${safeMonth}.pdf`;
   doc.save(filename);
