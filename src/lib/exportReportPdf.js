@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { Capacitor } from '@capacitor/core';
 
 function formatCurrency(value) {
   return new Intl.NumberFormat('en-US', {
@@ -8,9 +9,8 @@ function formatCurrency(value) {
   }).format(Number(value || 0));
 }
 
-export function exportEntriesPdf({
+function buildDoc({
   entries = [],
-  selectedUser = 'all',
   selectedMonth = 'all',
   visibleUserLabel = 'All Users',
 }) {
@@ -104,15 +104,6 @@ export function exportEntriesPdf({
       7: { cellWidth: 110 },
     },
     margin: { left: 30, right: 30 },
-    didDrawPage: () => {
-      const pageSize = doc.internal.pageSize;
-      const pageWidth = pageSize.width;
-      const pageHeight = pageSize.height;
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.text(`Page ${doc.getNumberOfPages()}`, pageWidth - 65, pageHeight - 20);
-    },
   });
 
   const finalY = doc.lastAutoTable?.finalY || 210;
@@ -127,6 +118,17 @@ export function exportEntriesPdf({
   doc.text(`Client Total: ${formatCurrency(totals.client)}`, 40, finalY + 57);
   doc.text(`Internal Total: ${formatCurrency(totals.internal)}`, 40, finalY + 72);
 
+  return doc;
+}
+
+export function exportEntriesPdf({
+  entries = [],
+  selectedUser = 'all',
+  selectedMonth = 'all',
+  visibleUserLabel = 'All Users',
+}) {
+  const doc = buildDoc({ entries, selectedMonth, visibleUserLabel });
+
   const safeUser = visibleUserLabel
     .replace(/[^a-z0-9]+/gi, '_')
     .replace(/^_+|_+$/g, '');
@@ -135,5 +137,31 @@ export function exportEntriesPdf({
     .replace(/[^a-z0-9_-]+/gi, '_');
 
   const filename = `positive_adversity_report_${safeUser || 'all_users'}_${safeMonth}.pdf`;
-  doc.save(filename);
+
+  if (!Capacitor.isNativePlatform()) {
+    doc.save(filename);
+    return;
+  }
+
+  // Mobile fallback: open the PDF in a new browser view/tab if possible.
+  // This is safer than native filesystem/share while your Android toolchain is unstable.
+  const blob = doc.output('blob');
+  const url = URL.createObjectURL(blob);
+
+  try {
+    const opened = window.open(url, '_blank');
+
+    if (!opened) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 15000);
+  }
 }

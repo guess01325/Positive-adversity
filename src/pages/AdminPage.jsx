@@ -100,14 +100,25 @@ export default function AdminPage() {
       : userOptions.find((option) => option.userId === selectedUser)?.label ||
         'Selected User';
 
-  function handleDownloadPdf() {
-    exportEntriesPdf({
-      entries: filteredEntries,
-      selectedUser,
-      selectedMonth,
-      visibleUserLabel: selectedUserLabel,
-    });
+function handleDownloadPdf() {
+  const isNative =
+    typeof window !== 'undefined' &&
+    window?.Capacitor?.isNativePlatform?.();
+
+  if (isNative) {
+    alert(
+      'PDF export is available in the web admin view right now. I am finishing direct mobile PDF handling next.'
+    );
+    return;
   }
+
+  exportEntriesPdf({
+    entries: filteredEntries,
+    selectedUser,
+    selectedMonth,
+    visibleUserLabel: selectedUserLabel,
+  });
+}
 
   function handleEdit(entry) {
     setEditingEntry(entry);
@@ -371,7 +382,7 @@ export default function AdminPage() {
             disabled={!filteredEntries.length}
             className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Download PDF
+            PDF Report
           </button>
         </div>
       </section>
