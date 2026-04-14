@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">positive-adversity-app</string>
+    <string name="title_activity_main">positive-adversity-app</string>
+    <string name="package_name">com.positiveadversity.app</string>
+    <string name="custom_url_scheme">com.positiveadversity.app</string>
+</resources>

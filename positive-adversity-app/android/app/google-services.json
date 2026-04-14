@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "224541354644",
+    "project_id": "positive-adveristy-app",
+    "storage_bucket": "positive-adveristy-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:224541354644:android:4f61be10991a078a356281",
+        "android_client_info": {
+          "package_name": "com.positiveadversity.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "224541354644-b96plp8cm1ro2k4n6bt1gmlnjsh6p74v.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.positiveadversity.app",
+            "certificate_hash": "526a536a69b8fd7043cbd30332215010ad2cc9f2"
+          }
+        },
+        {
+          "client_id": "224541354644-41o3c3730drbbagg79sinln18kbrnnnb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCY0QVKpaXx9FS00eV4ljKBCAkEx52pZJ4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "224541354644-41o3c3730drbbagg79sinln18kbrnnnb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
