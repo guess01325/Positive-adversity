@@ -1,175 +1,187 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { Capacitor } from '@capacitor/core';
-import { Filesystem, Directory } from '@capacitor/filesystem';
-import { Share } from '@capacitor/share';
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import logo from "../assets/positive-adversity-logo.webp";
+
+const DCF_SUPERVISION_FEE = 11.25;
 
 function formatCurrency(value) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(Number(value || 0));
+  return `$${Number(value || 0).toFixed(2)}`;
 }
 
-function buildDoc({
-  entries = [],
-  selectedMonth = 'all',
-  visibleUserLabel = 'All Users',
-}) {
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'pt',
-    format: 'letter',
+function formatDate(value) {
+  if (!value) return "-";
+
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+
+  return d.toLocaleDateString();
+}
+
+function getImageFormatFromDataUrl(dataUrl) {
+  if (dataUrl.startsWith("data:image/png")) return "PNG";
+  if (dataUrl.startsWith("data:image/jpeg")) return "JPEG";
+  if (dataUrl.startsWith("data:image/jpg")) return "JPEG";
+  if (dataUrl.startsWith("data:image/webp")) return "WEBP";
+  return "PNG";
+}
+
+async function imageToDataUrl(imageSrc) {
+  const response = await fetch(imageSrc);
+  const blob = await response.blob();
+
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
   });
+}
 
-  const generatedDate = new Date().toLocaleDateString();
+function getSupervisionFee(entry) {
+  const serviceType = String(entry?.serviceType || "").trim().toLowerCase();
+  return Number(entry?.supervisionFee || 0) || (serviceType === "dcf" ? DCF_SUPERVISION_FEE : 0);
+}
 
-  const totals = entries.reduce(
-    (acc, entry) => {
-      acc.hours += Number(entry.hours || 0);
-      acc.client += Number(entry.totalPay || 0);
-      acc.internal += Number(entry.internalTotal || 0);
-      return acc;
-    },
-    { hours: 0, client: 0, internal: 0 }
-  );
+function getInternalTotal(entry) {
+  const hours = Number(entry?.hours || 0);
+  const internalRate = Number(entry?.internalRate || 0);
+  const supervisionFee = getSupervisionFee(entry);
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text('Positive Adversity Youth Services Inc.', 40, 50);
+  if (entry?.internalTotal != null) {
+    return Number(entry.internalTotal || 0);
+  }
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.text('Allan@PositiveAdversity.org', 40, 68);
-  doc.text('www.positiveadversity.org', 40, 82);
-  doc.text('(860) 625-6656', 40, 96);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text('Work Session Report', 40, 128);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.text(`Generated: ${generatedDate}`, 40, 145);
-  doc.text(`Staff: ${visibleUserLabel}`, 40, 160);
-  doc.text(
-    `Month: ${selectedMonth === 'all' ? 'All Months' : selectedMonth}`,
-    40,
-    175
-  );
-  doc.text(`Entries: ${entries.length}`, 40, 190);
-
-  const rows = entries.map((entry) => [
-    entry.date || '-',
-    entry.student || '-',
-    entry.serviceType || '-',
-    Number(entry.hours || 0).toFixed(2),
-    formatCurrency(entry.totalPay),
-    formatCurrency(entry.internalTotal),
-    entry.userName || entry.userEmail || '-',
-    entry.note || '-',
-  ]);
-
-  autoTable(doc, {
-    startY: 210,
-    head: [[
-      'Date',
-      'Student',
-      'Service Type',
-      'Hours',
-      'Client Total',
-      'Internal Total',
-      'Staff',
-      'Note',
-    ]],
-    body: rows,
-    styles: {
-      font: 'helvetica',
-      fontSize: 8,
-      cellPadding: 5,
-      valign: 'top',
-      overflow: 'linebreak',
-    },
-    headStyles: {
-      fillColor: [31, 41, 55],
-      textColor: 255,
-      fontStyle: 'bold',
-    },
-    columnStyles: {
-      0: { cellWidth: 55 },
-      1: { cellWidth: 70 },
-      2: { cellWidth: 75 },
-      3: { halign: 'right', cellWidth: 42 },
-      4: { halign: 'right', cellWidth: 60 },
-      5: { halign: 'right', cellWidth: 65 },
-      6: { cellWidth: 60 },
-      7: { cellWidth: 110 },
-    },
-    margin: { left: 30, right: 30 },
-  });
-
-  const finalY = doc.lastAutoTable?.finalY || 210;
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text('Totals', 40, finalY + 25);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.text(`Total Hours: ${totals.hours.toFixed(2)}`, 40, finalY + 42);
-  doc.text(`Client Total: ${formatCurrency(totals.client)}`, 40, finalY + 57);
-  doc.text(`Internal Total: ${formatCurrency(totals.internal)}`, 40, finalY + 72);
-
-  return doc;
+  return Number((hours * internalRate + supervisionFee).toFixed(2));
 }
 
 export async function exportEntriesPdf({
   entries = [],
-  selectedMonth = 'all',
-  visibleUserLabel = 'All Users',
+  selectedMonth = "all",
+  visibleUserLabel = "All Users",
 }) {
-  const doc = buildDoc({ entries, selectedMonth, visibleUserLabel });
+  const doc = new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4",
+  });
 
-  const safeUser = visibleUserLabel
-    .replace(/[^a-z0-9]+/gi, '_')
-    .replace(/^_+|_+$/g, '');
+  const pageWidth = doc.internal.pageSize.getWidth();
 
-  const safeMonth = (selectedMonth === 'all' ? 'all_months' : selectedMonth)
-    .replace(/[^a-z0-9_-]+/gi, '_');
+  let logoDataUrl = null;
 
-  const filename = `positive_adversity_report_${safeUser || 'all_users'}_${safeMonth}.pdf`;
-
-  // Web / desktop
-  if (!Capacitor.isNativePlatform()) {
-    doc.save(filename);
-    return;
+  try {
+    logoDataUrl = await imageToDataUrl(logo);
+  } catch (error) {
+    console.error("Failed to load logo for PDF:", error);
   }
 
-  // Native mobile: write to cache, then share/open
-  const dataUri = doc.output('datauristring');
-  const base64 = dataUri.split(',')[1];
-
-  await Filesystem.writeFile({
-    path: filename,
-    data: base64,
-    directory: Directory.Cache,
-  });
-
-  const fileInfo = await Filesystem.getUri({
-    path: filename,
-    directory: Directory.Cache,
-  });
-
-  const canShare = await Share.canShare();
-
-  if (!canShare.value) {
-    throw new Error('Sharing is not supported on this device.');
+  if (logoDataUrl) {
+    const imageFormat = getImageFormatFromDataUrl(logoDataUrl);
+    doc.addImage(logoDataUrl, imageFormat, 10, 8, 22, 22);
   }
 
-  await Share.share({
-    title: 'Positive Adversity Report',
-    text: 'PDF report ready',
-    url: fileInfo.uri,
-    dialogTitle: 'Open or share PDF',
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.text("Positive Adversity Report", pageWidth - 10, 15, { align: "right" });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.text(`User Filter: ${visibleUserLabel}`, pageWidth - 10, 22, { align: "right" });
+  doc.text(
+    `Month Filter: ${selectedMonth === "all" ? "All Months" : selectedMonth}`,
+    pageWidth - 10,
+    28,
+    { align: "right" },
+  );
+  doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - 10, 34, {
+    align: "right",
   });
+
+  const totals = entries.reduce(
+    (acc, entry) => {
+      const hours = Number(entry?.hours || 0);
+      const supervisionFee = getSupervisionFee(entry);
+      const internalTotal = getInternalTotal(entry);
+
+      acc.entries += 1;
+      acc.hours += hours;
+      acc.supervisionFee += supervisionFee;
+      acc.internalTotal += internalTotal;
+
+      return acc;
+    },
+    {
+      entries: 0,
+      hours: 0,
+      supervisionFee: 0,
+      internalTotal: 0,
+    },
+  );
+
+  doc.setDrawColor(220, 220, 220);
+  doc.line(10, 40, pageWidth - 10, 40);
+
+  autoTable(doc, {
+    startY: 46,
+    head: [[
+      "Student",
+      "User",
+      "Service",
+      "Date",
+      "Hours",
+      "DCF Fee",
+      "Internal Total",
+    ]],
+    body: entries.map((entry) => [
+      entry?.student || "-",
+      entry?.userName || entry?.userEmail || entry?.userId || "-",
+      entry?.serviceType || "-",
+      entry?.date || formatDate(entry?.startTime),
+      Number(entry?.hours || 0).toFixed(2),
+      formatCurrency(getSupervisionFee(entry)),
+      formatCurrency(getInternalTotal(entry)),
+    ]),
+    styles: {
+      font: "helvetica",
+      fontSize: 8,
+      cellPadding: 2.5,
+      overflow: "linebreak",
+      valign: "middle",
+    },
+    headStyles: {
+      fillColor: [15, 23, 42],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+    },
+    theme: "grid",
+    margin: { left: 10, right: 10 },
+    didDrawPage: () => {
+      doc.setFontSize(9);
+      doc.setTextColor(110);
+      doc.text("Generated by Positive Adversity", 10, 200);
+    },
+  });
+
+  const finalY = doc.lastAutoTable?.finalY || 60;
+  const summaryY = finalY + 10;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+
+  doc.text(`Entries: ${totals.entries}`, 10, summaryY);
+  doc.text(`Hours: ${totals.hours.toFixed(2)}`, 70, summaryY);
+  doc.text(`DCF Fee Total: ${formatCurrency(totals.supervisionFee)}`, 150, summaryY);
+  doc.text(`Internal Total: ${formatCurrency(totals.internalTotal)}`, 255, summaryY, {
+    align: "right",
+  });
+
+  const safeUser = String(visibleUserLabel || "all_users")
+    .replace(/[^a-z0-9]/gi, "_")
+    .toLowerCase();
+
+  const safeMonth = String(selectedMonth || "all_months")
+    .replace(/[^a-z0-9]/gi, "_")
+    .toLowerCase();
+
+  doc.save(`positive_adversity_report_${safeUser}_${safeMonth}.pdf`);
 }

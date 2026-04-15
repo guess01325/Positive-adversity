@@ -4,6 +4,61 @@ import { useAuth } from "../contexts/AuthContext";
 import { deleteEntry, fetchAllEntries, updateEntry } from "../lib/firestore";
 import { exportEntriesPdf } from "../lib/exportReportPdf";
 
+const DCF_SUPERVISION_FEE = 11.25;
+
+function formatDateForInput(dateValue) {
+  if (!dateValue) return "";
+
+  const d = new Date(dateValue);
+  if (Number.isNaN(d.getTime())) return "";
+
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function formatTimeForInput(dateValue) {
+  if (!dateValue) return "";
+
+  const d = new Date(dateValue);
+  if (Number.isNaN(d.getTime())) return "";
+
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+
+  return `${hours}:${minutes}`;
+}
+
+function combineDateAndTime(dateStr, timeStr) {
+  if (!dateStr || !timeStr) return null;
+
+  const combined = new Date(`${dateStr}T${timeStr}`);
+  if (Number.isNaN(combined.getTime())) return null;
+
+  return combined;
+}
+
+function calculateHours(startDate, endDate) {
+  if (!startDate || !endDate) return "";
+
+  const diffMs = endDate.getTime() - startDate.getTime();
+  if (diffMs <= 0) return "";
+
+  const hours = diffMs / (1000 * 60 * 60);
+  return Number(hours.toFixed(2));
+}
+
+function getMonthKey(dateStr) {
+  if (!dateStr) return "";
+  return dateStr.slice(0, 7);
+}
+
+function formatMoney(value) {
+  return `$${Number(value || 0).toFixed(2)}`;
+}
+
 export default function AdminPage() {
   const { user, role, isAdmin } = useAuth();
 
@@ -18,6 +73,9 @@ export default function AdminPage() {
   const [editForm, setEditForm] = useState({
     student: "",
     serviceType: "",
+    date: "",
+    startTime: "",
+    endTime: "",
     hours: "",
     note: "",
   });
@@ -28,7 +86,7 @@ export default function AdminPage() {
       try {
         setLoading(true);
         const data = await fetchAllEntries();
-        setEntries(data);
+        setEntries(data || []);
       } catch (error) {
         console.error("Failed to load admin entries:", error);
         alert(error?.message || "Failed to load admin entries");
@@ -66,7 +124,19 @@ export default function AdminPage() {
 
   const monthOptions = useMemo(() => {
     const months = Array.from(
-      new Set(entries.map((entry) => entry.monthKey).filter(Boolean)),
+      new Set(
+        entries
+          .map((entry) => {
+            if (entry.monthKey) return entry.monthKey;
+            if (entry.date) return getMonthKey(entry.date);
+            if (entry.startTime) {
+              const dateStr = formatDateForInput(entry.startTime);
+              return getMonthKey(dateStr);
+            }
+            return "";
+          })
+          .filter(Boolean),
+      ),
     );
 
     return months.sort((a, b) => b.localeCompare(a));
@@ -77,8 +147,13 @@ export default function AdminPage() {
       const matchesUser =
         selectedUser === "all" || entry.userId === selectedUser;
 
+      const entryMonth =
+        entry.monthKey ||
+        getMonthKey(entry.date) ||
+        (entry.startTime ? getMonthKey(formatDateForInput(entry.startTime)) : "");
+
       const matchesMonth =
-        selectedMonth === "all" || entry.monthKey === selectedMonth;
+        selectedMonth === "all" || entryMonth === selectedMonth;
 
       const matchesStudent =
         !studentSearch.trim() ||
@@ -96,6 +171,45 @@ export default function AdminPage() {
       : userOptions.find((option) => option.userId === selectedUser)?.label ||
         "Selected User";
 
+  const totals = useMemo(() => {
+    return filteredEntries.reduce(
+      (acc, entry) => {
+        const hours = Number(entry.hours || 0);
+        const totalPay = Number(entry.totalPay || 0);
+        const serviceType = String(entry.serviceType || "").trim().toLowerCase();
+
+        const supervisionFee =
+          Number(entry.supervisionFee || 0) ||
+          (serviceType === "dcf" ? DCF_SUPERVISION_FEE : 0);
+
+        const internalRate = Number(entry.internalRate || 0);
+        const fallbackInternalTotal = Number(
+          (hours * internalRate + supervisionFee).toFixed(2),
+        );
+
+        const internalTotal =
+          entry.internalTotal != null
+            ? Number(entry.internalTotal || 0)
+            : fallbackInternalTotal;
+
+        acc.entryCount += 1;
+        acc.hours += hours;
+        acc.totalPay += totalPay;
+        acc.supervisionFee += supervisionFee;
+        acc.internalTotal += internalTotal;
+
+        return acc;
+      },
+      {
+        entryCount: 0,
+        hours: 0,
+        totalPay: 0,
+        supervisionFee: 0,
+        internalTotal: 0,
+      },
+    );
+  }, [filteredEntries]);
+
   async function handleDownloadPdf() {
     try {
       await exportEntriesPdf({
@@ -111,14 +225,30 @@ export default function AdminPage() {
 
   function handleEdit(entry) {
     setEditingEntry(entry);
+
+    const dateInput =
+      entry.date ||
+      formatDateForInput(entry.startTime) ||
+      formatDateForInput(entry.createdAt);
+
+    const startInput = entry.startTime
+      ? formatTimeForInput(entry.startTime)
+      : "";
+
+    const endInput = entry.endTime
+      ? formatTimeForInput(entry.endTime)
+      : "";
+
     setEditForm({
       student: entry.student || "",
       serviceType: entry.serviceType || "",
+      date: dateInput || "",
+      startTime: startInput,
+      endTime: endInput,
       hours: String(entry.hours ?? ""),
       note: entry.note || "",
     });
 
-    // helpful on mobile so user sees the form immediately
     setTimeout(() => {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }, 50);
@@ -129,13 +259,55 @@ export default function AdminPage() {
     setEditForm({
       student: "",
       serviceType: "",
+      date: "",
+      startTime: "",
+      endTime: "",
       hours: "",
       note: "",
     });
   }
 
+  function handleEditChange(name, value) {
+    setEditForm((prev) => {
+      const updated = {
+        ...prev,
+        [name]: value,
+      };
+
+      if (name === "date" || name === "startTime" || name === "endTime") {
+        const start = combineDateAndTime(updated.date, updated.startTime);
+        const end = combineDateAndTime(updated.date, updated.endTime);
+        const autoHours = calculateHours(start, end);
+
+        if (autoHours !== "") {
+          updated.hours = String(autoHours);
+        }
+      }
+
+      return updated;
+    });
+  }
+
   async function handleSaveEdit() {
     if (!editingEntry) return;
+
+    if (!editForm.date || !editForm.startTime || !editForm.endTime) {
+      alert("Please enter date, start time, and end time.");
+      return;
+    }
+
+    const startDateTime = combineDateAndTime(editForm.date, editForm.startTime);
+    const endDateTime = combineDateAndTime(editForm.date, editForm.endTime);
+
+    if (!startDateTime || !endDateTime) {
+      alert("Please enter valid date and time values.");
+      return;
+    }
+
+    if (endDateTime <= startDateTime) {
+      alert("End time must be after start time.");
+      return;
+    }
 
     const hours = Number(editForm.hours);
     if (Number.isNaN(hours) || hours < 0) {
@@ -149,13 +321,24 @@ export default function AdminPage() {
       const hourlyRate = Number(editingEntry.hourlyRate || 0);
       const internalRate = Number(editingEntry.internalRate || 0);
 
+      const serviceType = editForm.serviceType.trim();
+      const isDCF = serviceType.toLowerCase() === "dcf";
+      const supervisionFee = isDCF ? DCF_SUPERVISION_FEE : 0;
+
       const updates = {
         student: editForm.student.trim(),
-        serviceType: editForm.serviceType.trim(),
+        serviceType,
+        date: editForm.date,
+        monthKey: getMonthKey(editForm.date),
+        startTime: startDateTime.toISOString(),
+        endTime: endDateTime.toISOString(),
         hours,
         note: editForm.note.trim(),
-        totalPay: hours * hourlyRate,
-        internalTotal: hours * internalRate,
+        totalPay: Number((hours * hourlyRate).toFixed(2)),
+        supervisionFee,
+        internalTotal: Number(
+          (hours * internalRate + supervisionFee).toFixed(2),
+        ),
       };
 
       await updateEntry(editingEntry.id, updates);
@@ -254,9 +437,7 @@ export default function AdminPage() {
               <input
                 type="text"
                 value={editForm.student}
-                onChange={(e) =>
-                  setEditForm((prev) => ({ ...prev, student: e.target.value }))
-                }
+                onChange={(e) => handleEditChange("student", e.target.value)}
                 className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
               />
             </div>
@@ -268,12 +449,43 @@ export default function AdminPage() {
               <input
                 type="text"
                 value={editForm.serviceType}
-                onChange={(e) =>
-                  setEditForm((prev) => ({
-                    ...prev,
-                    serviceType: e.target.value,
-                  }))
-                }
+                onChange={(e) => handleEditChange("serviceType", e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Date
+              </label>
+              <input
+                type="date"
+                value={editForm.date}
+                onChange={(e) => handleEditChange("date", e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Start Time
+              </label>
+              <input
+                type="time"
+                value={editForm.startTime}
+                onChange={(e) => handleEditChange("startTime", e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                End Time
+              </label>
+              <input
+                type="time"
+                value={editForm.endTime}
+                onChange={(e) => handleEditChange("endTime", e.target.value)}
                 className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
               />
             </div>
@@ -287,9 +499,7 @@ export default function AdminPage() {
                 min="0"
                 step="0.25"
                 value={editForm.hours}
-                onChange={(e) =>
-                  setEditForm((prev) => ({ ...prev, hours: e.target.value }))
-                }
+                onChange={(e) => handleEditChange("hours", e.target.value)}
                 className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
               />
             </div>
@@ -301,12 +511,41 @@ export default function AdminPage() {
               <textarea
                 rows={4}
                 value={editForm.note}
-                onChange={(e) =>
-                  setEditForm((prev) => ({ ...prev, note: e.target.value }))
-                }
+                onChange={(e) => handleEditChange("note", e.target.value)}
                 className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
               />
             </div>
+          </div>
+
+          <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-700 space-y-1">
+            <p>
+              <span className="font-medium">Calculated Hours:</span>{" "}
+              {editForm.hours || "0"}
+            </p>
+            <p>
+              <span className="font-medium">Client Total:</span>{" "}
+              {formatMoney(
+                Number(editForm.hours || 0) * Number(editingEntry?.hourlyRate || 0),
+              )}
+            </p>
+            <p>
+              <span className="font-medium">DCF Supervision Fee:</span>{" "}
+              {formatMoney(
+                (editForm.serviceType || "").trim().toLowerCase() === "dcf"
+                  ? DCF_SUPERVISION_FEE
+                  : 0,
+              )}
+            </p>
+            <p>
+              <span className="font-medium">Internal Total:</span>{" "}
+              {formatMoney(
+                Number(editForm.hours || 0) *
+                  Number(editingEntry?.internalRate || 0) +
+                  ((editForm.serviceType || "").trim().toLowerCase() === "dcf"
+                    ? DCF_SUPERVISION_FEE
+                    : 0),
+              )}
+            </p>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-3">
@@ -367,6 +606,53 @@ export default function AdminPage() {
           />
         </div>
 
+        <div className="mt-4 grid gap-3 md:grid-cols-5">
+          <div className="rounded-xl bg-slate-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Entries
+            </p>
+            <p className="mt-1 text-xl font-bold text-slate-900">
+              {totals.entryCount}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-slate-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Hours
+            </p>
+            <p className="mt-1 text-xl font-bold text-slate-900">
+              {totals.hours.toFixed(2)}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-slate-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Client Total
+            </p>
+            <p className="mt-1 text-xl font-bold text-slate-900">
+              {formatMoney(totals.totalPay)}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-slate-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              DCF Supervision
+            </p>
+            <p className="mt-1 text-xl font-bold text-slate-900">
+              {formatMoney(totals.supervisionFee)}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-slate-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Internal Total
+            </p>
+            <p className="mt-1 text-xl font-bold text-slate-900">
+              {formatMoney(totals.internalTotal)}
+            </p>
+          </div>
+        </div>
+
         <div className="mt-4 flex justify-end">
           <button
             type="button"
@@ -390,6 +676,7 @@ export default function AdminPage() {
           showStudent={true}
           showInternalTotals={true}
           showAdminActions={true}
+          showTimes={false}
           onEdit={handleEdit}
           onDelete={handleDelete}
         />

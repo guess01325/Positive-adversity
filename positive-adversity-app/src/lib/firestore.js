@@ -14,6 +14,10 @@ import {
 import { db } from './firebase';
 import { isAdminEmail } from './utils';
 
+function getSupervisionFee(serviceType) {
+  return (serviceType || '').trim().toLowerCase() === 'dcf' ? 11.25 : 0;
+}
+
 export async function upsertUserProfile(user) {
   if (!user?.uid) {
     throw new Error('Missing user uid for profile sync.');
@@ -76,11 +80,17 @@ export async function createEntry(entry) {
     throw new Error('Entry is missing userId.');
   }
 
+  const serviceType = entry.serviceType || '';
+  const supervisionFee = getSupervisionFee(serviceType);
+
+  const baseTotalPay = Number(entry.totalPay) || 0;
+  const baseInternalTotal = Number(entry.internalTotal) || 0;
+
   const payload = {
     userId: entry.userId,
     userEmail: entry.userEmail || '',
     userName: entry.userName || '',
-    serviceType: entry.serviceType || '',
+    serviceType,
     date: entry.date || '',
     startTime: entry.startTime || '',
     endTime: entry.endTime || '',
@@ -89,9 +99,16 @@ export async function createEntry(entry) {
     monthKey: entry.monthKey || '',
     hours: Number(entry.hours) || 0,
     hourlyRate: Number(entry.hourlyRate) || 0,
-    totalPay: Number(entry.totalPay) || 0,
+
+    // client side stays normal
+    totalPay: baseTotalPay,
+
     internalRate: Number(entry.internalRate) || 0,
-    internalTotal: Number(entry.internalTotal) || 0,
+
+    // internal side includes supervision fee for DCF
+    internalTotal: baseInternalTotal + supervisionFee,
+    supervisionFee,
+
     createdAt: serverTimestamp(),
   };
 

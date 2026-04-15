@@ -91,6 +91,7 @@ export default function DashboardPage() {
           emptyMessage="No work sessions logged yet for this account."
           showStudent={true}
           showInternalTotals={false}
+          showTimes={false}
         />
       )}
     </div>
