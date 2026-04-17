@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { SERVICE_OPTIONS, SERVICE_RATES } from '../lib/constants';
 import { calculateHours, toMonthKey } from '../lib/utils';
 
+const NOTE_WORD_LIMIT = 2500;
+
 const initialState = {
   serviceType: 'DCF',
   date: new Date().toISOString().slice(0, 10),
@@ -11,35 +13,86 @@ const initialState = {
   student: '',
 };
 
+function countWords(text) {
+  const trimmed = String(text || '').trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
+}
+
+function trimToWordLimit(text, limit) {
+  const trimmed = String(text || '').trim();
+  if (!trimmed) return '';
+  return trimmed.split(/\s+/).slice(0, limit).join(' ');
+}
+
 export default function EntryForm({ onSubmit, submitting }) {
   const [form, setForm] = useState(initialState);
 
-  const hours = useMemo(
-    () => calculateHours(form.startTime, form.endTime),
-    [form.startTime, form.endTime]
-  );
+  const hours = useMemo(() => {
+    return calculateHours(form.startTime, form.endTime);
+  }, [form.startTime, form.endTime]);
 
-  const selectedRates = SERVICE_RATES[form.serviceType];
-  const clientRate = selectedRates?.client ?? 0;
-  const internalRate = selectedRates?.internal ?? 0;
+  const selectedRates = SERVICE_RATES[form.serviceType] || {};
+  const clientRate = selectedRates.client ?? 0;
+  const internalRate = selectedRates.internal ?? 0;
 
-  const totalPay = useMemo(() => clientRate * hours, [clientRate, hours]);
-  const internalTotal = useMemo(
-    () => internalRate * hours,
-    [internalRate, hours]
-  );
+  const totalPay = useMemo(() => {
+    return clientRate * hours;
+  }, [clientRate, hours]);
+
+  const internalTotal = useMemo(() => {
+    return internalRate * hours;
+  }, [internalRate, hours]);
+
+  const noteWordCount = useMemo(() => {
+    return countWords(form.note);
+  }, [form.note]);
 
   function updateField(event) {
     const { name, value } = event.target;
-    setForm((current) => ({ ...current, [name]: value }));
+
+    if (name === 'note') {
+      const nextWordCount = countWords(value);
+
+      if (nextWordCount <= NOTE_WORD_LIMIT) {
+        setForm((current) => ({ ...current, note: value }));
+        return;
+      }
+
+      setForm((current) => ({
+        ...current,
+        note: trimToWordLimit(value, NOTE_WORD_LIMIT),
+      }));
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
 
+    const cleanStudent = form.student.trim();
+    const cleanNote = form.note.trim();
+    const finalWordCount = countWords(cleanNote);
+
+    if (finalWordCount > NOTE_WORD_LIMIT) {
+      alert(`Notes cannot exceed ${NOTE_WORD_LIMIT} words.`);
+      return;
+    }
+
+    if (!hours || hours <= 0) {
+      alert('End time must be after start time.');
+      return;
+    }
+
     const payload = {
       ...form,
-      student: form.student.trim(),
+      student: cleanStudent,
+      note: cleanNote,
       hours,
       hourlyRate: clientRate,
       totalPay,
@@ -93,8 +146,8 @@ export default function EntryForm({ onSubmit, submitting }) {
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           >
             {SERVICE_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option} (${SERVICE_RATES[option].client}/hr)
+              <option key={option.value} value={option.value}>
+                {option.label} (${SERVICE_RATES[option.value]?.client ?? 0}/hr)
               </option>
             ))}
           </select>
@@ -174,11 +227,12 @@ export default function EntryForm({ onSubmit, submitting }) {
             value={form.note}
             onChange={updateField}
             placeholder="Add session notes..."
-            maxLength={10000}
             required
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           />
-          <p className="mt-1 text-xs text-slate-400">{form.note.length}/10000 characters</p>
+          <p className="mt-1 text-xs text-slate-400">
+            {noteWordCount}/{NOTE_WORD_LIMIT} words
+          </p>
         </div>
 
         <div className="rounded-2xl bg-slate-50 p-4 md:col-span-2">
@@ -187,21 +241,27 @@ export default function EntryForm({ onSubmit, submitting }) {
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Hours
               </p>
-              <p className="mt-1 text-lg font-semibold text-slate-900">{hours.toFixed(2)}</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">
+                {hours.toFixed(2)}
+              </p>
             </div>
 
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Rate
               </p>
-              <p className="mt-1 text-lg font-semibold text-slate-900">${clientRate}/hr</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">
+                ${clientRate}/hr
+              </p>
             </div>
 
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Month bucket
               </p>
-              <p className="mt-1 text-lg font-semibold text-slate-900">{toMonthKey(form.date)}</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">
+                {toMonthKey(form.date)}
+              </p>
             </div>
           </div>
         </div>

@@ -76,11 +76,15 @@ export async function createEntry(entry) {
     throw new Error('Entry is missing userId.');
   }
 
+  const serviceType = entry.serviceType || '';
+  const baseTotalPay = Number(entry.totalPay) || 0;
+  const baseInternalTotal = Number(entry.internalTotal) || 0;
+
   const payload = {
     userId: entry.userId,
     userEmail: entry.userEmail || '',
     userName: entry.userName || '',
-    serviceType: entry.serviceType || '',
+    serviceType,
     date: entry.date || '',
     startTime: entry.startTime || '',
     endTime: entry.endTime || '',
@@ -89,9 +93,9 @@ export async function createEntry(entry) {
     monthKey: entry.monthKey || '',
     hours: Number(entry.hours) || 0,
     hourlyRate: Number(entry.hourlyRate) || 0,
-    totalPay: Number(entry.totalPay) || 0,
+    totalPay: baseTotalPay,
     internalRate: Number(entry.internalRate) || 0,
-    internalTotal: Number(entry.internalTotal) || 0,
+    internalTotal: baseInternalTotal,
     createdAt: serverTimestamp(),
   };
 
@@ -199,4 +203,83 @@ export async function deleteEntry(entryId) {
 
   const entryRef = doc(db, 'entries', entryId);
   await deleteDoc(entryRef);
+}
+
+export async function addDCFAdjustment({ monthKey, student, createdBy }) {
+  if (!monthKey || !student?.trim()) {
+    throw new Error('Missing month or student for DCF adjustment.');
+  }
+
+  const payload = {
+    type: 'dcf_supervision',
+    serviceType: 'DCF',
+    student: student.trim(),
+    monthKey,
+    amount: 11.25,
+    createdBy: createdBy || '',
+    createdAt: serverTimestamp(),
+  };
+
+  const docRef = await addDoc(collection(db, 'invoiceAdjustments'), payload);
+  return { id: docRef.id };
+}
+
+export async function fetchAdjustments() {
+  const snapshot = await getDocs(collection(db, 'invoiceAdjustments'));
+
+  return snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+}
+
+export async function fetchDCFAdjustmentsByMonth(monthKey) {
+  if (!monthKey || monthKey === 'all') return [];
+
+  const q = query(
+    collection(db, 'invoiceAdjustments'),
+    where('type', '==', 'dcf_supervision'),
+    where('serviceType', '==', 'DCF'),
+    where('monthKey', '==', monthKey)
+  );
+
+  const snapshot = await getDocs(q);
+
+  return snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+}
+
+export async function findDCFAdjustment(monthKey, student) {
+  if (!monthKey || !student?.trim()) return null;
+
+  const normalizedStudent = student.trim().toLowerCase();
+
+  const q = query(
+    collection(db, 'invoiceAdjustments'),
+    where('type', '==', 'dcf_supervision'),
+    where('serviceType', '==', 'DCF'),
+    where('monthKey', '==', monthKey)
+  );
+
+  const snapshot = await getDocs(q);
+
+  const match = snapshot.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }))
+    .find(
+      (item) =>
+        String(item.student || '').trim().toLowerCase() === normalizedStudent
+    );
+
+  return match || null;
+}
+
+export async function deleteAdjustment(adjustmentId) {
+  if (!adjustmentId) {
+    throw new Error('Missing adjustment id for delete.');
+  }
+
+  const adjustmentRef = doc(db, 'invoiceAdjustments', adjustmentId);
+  await deleteDoc(adjustmentRef);
 }

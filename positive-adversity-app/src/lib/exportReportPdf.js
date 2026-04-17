@@ -1,175 +1,253 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { Capacitor } from '@capacitor/core';
-import { Filesystem, Directory } from '@capacitor/filesystem';
-import { Share } from '@capacitor/share';
+import { Capacitor } from "@capacitor/core";
+import { Filesystem, Directory } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import logo from "../assets/logo-full.png";
 
 function formatCurrency(value) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(Number(value || 0));
+  return `$${Number(value || 0).toFixed(2)}`;
 }
 
-function buildDoc({
-  entries = [],
-  selectedMonth = 'all',
-  visibleUserLabel = 'All Users',
-}) {
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'pt',
-    format: 'letter',
+function formatDate(value) {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString();
+}
+
+function formatTime(value) {
+  if (!value) return "-";
+
+  if (typeof value === "string" && /^\d{2}:\d{2}$/.test(value)) {
+    const [hourString, minute] = value.split(":");
+    const hour = Number(hourString);
+    if (Number.isNaN(hour)) return value;
+
+    const suffix = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour % 12 || 12;
+
+    return `${displayHour}:${minute} ${suffix}`;
+  }
+
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+
+  return d.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
   });
+}
 
-  const generatedDate = new Date().toLocaleDateString();
+function getImageFormatFromDataUrl(dataUrl) {
+  if (dataUrl.startsWith("data:image/png")) return "PNG";
+  if (dataUrl.startsWith("data:image/jpeg")) return "JPEG";
+  if (dataUrl.startsWith("data:image/jpg")) return "JPEG";
+  if (dataUrl.startsWith("data:image/webp")) return "WEBP";
+  return "PNG";
+}
 
-  const totals = entries.reduce(
-    (acc, entry) => {
-      acc.hours += Number(entry.hours || 0);
-      acc.client += Number(entry.totalPay || 0);
-      acc.internal += Number(entry.internalTotal || 0);
-      return acc;
-    },
-    { hours: 0, client: 0, internal: 0 }
-  );
+async function imageToDataUrl(imageSrc) {
+  const response = await fetch(imageSrc);
+  const blob = await response.blob();
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text('Positive Adversity Youth Services Inc.', 40, 50);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.text('Allan@PositiveAdversity.org', 40, 68);
-  doc.text('www.positiveadversity.org', 40, 82);
-  doc.text('(860) 625-6656', 40, 96);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text('Work Session Report', 40, 128);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.text(`Generated: ${generatedDate}`, 40, 145);
-  doc.text(`Staff: ${visibleUserLabel}`, 40, 160);
-  doc.text(
-    `Month: ${selectedMonth === 'all' ? 'All Months' : selectedMonth}`,
-    40,
-    175
-  );
-  doc.text(`Entries: ${entries.length}`, 40, 190);
-
-  const rows = entries.map((entry) => [
-    entry.date || '-',
-    entry.student || '-',
-    entry.serviceType || '-',
-    Number(entry.hours || 0).toFixed(2),
-    formatCurrency(entry.totalPay),
-    formatCurrency(entry.internalTotal),
-    entry.userName || entry.userEmail || '-',
-    entry.note || '-',
-  ]);
-
-  autoTable(doc, {
-    startY: 210,
-    head: [[
-      'Date',
-      'Student',
-      'Service Type',
-      'Hours',
-      'Client Total',
-      'Internal Total',
-      'Staff',
-      'Note',
-    ]],
-    body: rows,
-    styles: {
-      font: 'helvetica',
-      fontSize: 8,
-      cellPadding: 5,
-      valign: 'top',
-      overflow: 'linebreak',
-    },
-    headStyles: {
-      fillColor: [31, 41, 55],
-      textColor: 255,
-      fontStyle: 'bold',
-    },
-    columnStyles: {
-      0: { cellWidth: 55 },
-      1: { cellWidth: 70 },
-      2: { cellWidth: 75 },
-      3: { halign: 'right', cellWidth: 42 },
-      4: { halign: 'right', cellWidth: 60 },
-      5: { halign: 'right', cellWidth: 65 },
-      6: { cellWidth: 60 },
-      7: { cellWidth: 110 },
-    },
-    margin: { left: 30, right: 30 },
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
   });
+}
 
-  const finalY = doc.lastAutoTable?.finalY || 210;
+function uint8ToBase64(uint8Array) {
+  let binary = "";
+  const chunkSize = 0x8000;
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text('Totals', 40, finalY + 25);
+  for (let i = 0; i < uint8Array.length; i += chunkSize) {
+    const chunk = uint8Array.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.text(`Total Hours: ${totals.hours.toFixed(2)}`, 40, finalY + 42);
-  doc.text(`Client Total: ${formatCurrency(totals.client)}`, 40, finalY + 57);
-  doc.text(`Internal Total: ${formatCurrency(totals.internal)}`, 40, finalY + 72);
+  return btoa(binary);
+}
 
-  return doc;
+function getInternalTotal(entry) {
+  const hours = Number(entry?.hours || 0);
+  const internalRate = Number(entry?.internalRate || 0);
+
+  if (entry?.internalTotal != null) {
+    return Number(entry.internalTotal || 0);
+  }
+
+  return Number((hours * internalRate).toFixed(2));
 }
 
 export async function exportEntriesPdf({
   entries = [],
-  selectedMonth = 'all',
-  visibleUserLabel = 'All Users',
+  selectedMonth = "all",
+  visibleUserLabel = "All Users",
+  dcfSupervisionAmount = 0,
 }) {
-  const doc = buildDoc({ entries, selectedMonth, visibleUserLabel });
+  const doc = new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4",
+  });
 
-  const safeUser = visibleUserLabel
-    .replace(/[^a-z0-9]+/gi, '_')
-    .replace(/^_+|_+$/g, '');
+  const pageWidth = doc.internal.pageSize.getWidth();
 
-  const safeMonth = (selectedMonth === 'all' ? 'all_months' : selectedMonth)
-    .replace(/[^a-z0-9_-]+/gi, '_');
+  let logoDataUrl = null;
 
-  const filename = `positive_adversity_report_${safeUser || 'all_users'}_${safeMonth}.pdf`;
+  try {
+    logoDataUrl = await imageToDataUrl(logo);
+  } catch (error) {
+    console.error("Failed to load logo for PDF:", error);
+  }
 
-  // Web / desktop
+  // HEADER (LEFT ONLY)
+  if (logoDataUrl) {
+    const imageFormat = getImageFormatFromDataUrl(logoDataUrl);
+    doc.addImage(logoDataUrl, imageFormat, 10, 8, 22, 22);
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.text("Positive Adversity Youth Services Inc.", 36, 14);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.text("Allan@PositiveAdversity.org", 36, 20);
+  doc.text("www.positiveadversity.org", 36, 26);
+  doc.text("(860) 625-6656", 36, 32);
+
+  doc.setDrawColor(220, 220, 220);
+  doc.line(10, 40, pageWidth - 10, 40);
+
+  const totals = entries.reduce(
+    (acc, entry) => {
+      const hours = Number(entry?.hours || 0);
+      const internalTotal = getInternalTotal(entry);
+
+      acc.entries += 1;
+      acc.hours += hours;
+      acc.internalTotal += internalTotal;
+
+      return acc;
+    },
+    { entries: 0, hours: 0, internalTotal: 0 }
+  );
+
+  const finalInternalTotal =
+    totals.internalTotal + Number(dcfSupervisionAmount || 0);
+
+  autoTable(doc, {
+    startY: 46,
+    showHead: "firstPage",
+    head: [[
+      "Student",
+      "Service",
+      "Date",
+      "Time",
+      "Hours",
+      "Internal Rate",
+      "Internal Total",
+    ]],
+    body: entries.flatMap((entry) => {
+      const mainRow = [
+        entry?.student || "-",
+        entry?.serviceType || "-",
+        entry?.date || formatDate(entry?.startTime),
+        `${formatTime(entry?.startTime)} - ${formatTime(entry?.endTime)}`,
+        Number(entry?.hours || 0).toFixed(2),
+        formatCurrency(entry?.internalRate || 0),
+        formatCurrency(getInternalTotal(entry)),
+      ];
+
+      const noteRow = [
+        {
+          content: `Note: ${entry?.note || "-"}`,
+          colSpan: 7,
+          styles: {
+            textColor: [70, 70, 70],
+            fillColor: [248, 250, 252],
+          },
+        },
+      ];
+
+      return [mainRow, noteRow];
+    }),
+    styles: {
+      font: "helvetica",
+      fontSize: 8,
+      cellPadding: 2.5,
+      overflow: "linebreak",
+    },
+    headStyles: {
+      fillColor: [15, 23, 42],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+    },
+    theme: "grid",
+    margin: { left: 10, right: 10 },
+  });
+
+  const finalY = doc.lastAutoTable?.finalY || 60;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  let summaryY = finalY + 10;
+
+  // NEW PAGE HEADER (ALSO LEFT ONLY)
+  if (summaryY > pageHeight - 12) {
+    doc.addPage();
+
+    if (logoDataUrl) {
+      const imageFormat = getImageFormatFromDataUrl(logoDataUrl);
+      doc.addImage(logoDataUrl, imageFormat, 10, 8, 22, 22);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("Positive Adversity Youth Services Inc.", 36, 14);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("Allan@PositiveAdversity.org", 36, 20);
+    doc.text("www.positiveadversity.org", 36, 26);
+    doc.text("(860) 625-6656", 36, 32);
+
+    doc.setDrawColor(220, 220, 220);
+    doc.line(10, 40, pageWidth - 10, 40);
+
+    summaryY = 52;
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+
+  doc.text(`Entries: ${totals.entries}`, 10, summaryY);
+  doc.text(`Hours: ${totals.hours.toFixed(2)}`, 70, summaryY);
+  doc.text(`DCF Supervision: ${formatCurrency(dcfSupervisionAmount)}`, 130, summaryY);
+  doc.text(`Internal Total: ${formatCurrency(finalInternalTotal)}`, 287, summaryY, { align: "right" });
+
+  const fileName = `positive_adversity_report.pdf`;
+
   if (!Capacitor.isNativePlatform()) {
-    doc.save(filename);
+    doc.save(fileName);
     return;
   }
 
-  // Native mobile: write to cache, then share/open
-  const dataUri = doc.output('datauristring');
-  const base64 = dataUri.split(',')[1];
+  const arrayBuffer = doc.output("arraybuffer");
+  const base64Data = uint8ToBase64(new Uint8Array(arrayBuffer));
 
-  await Filesystem.writeFile({
-    path: filename,
-    data: base64,
-    directory: Directory.Cache,
+  const result = await Filesystem.writeFile({
+    path: fileName,
+    data: base64Data,
+    directory: Directory.Documents,
+    recursive: true,
   });
-
-  const fileInfo = await Filesystem.getUri({
-    path: filename,
-    directory: Directory.Cache,
-  });
-
-  const canShare = await Share.canShare();
-
-  if (!canShare.value) {
-    throw new Error('Sharing is not supported on this device.');
-  }
 
   await Share.share({
-    title: 'Positive Adversity Report',
-    text: 'PDF report ready',
-    url: fileInfo.uri,
-    dialogTitle: 'Open or share PDF',
+    title: "Positive Adversity Report",
+    text: "Positive Adversity PDF Report",
+    url: result.uri,
   });
 }

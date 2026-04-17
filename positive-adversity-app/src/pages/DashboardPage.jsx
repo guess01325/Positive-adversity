@@ -3,9 +3,10 @@ import EntryForm from '../components/EntryForm';
 import EntriesByMonth from '../components/EntriesByMonth';
 import { useAuth } from '../contexts/AuthContext';
 import { createEntry, fetchEntriesByUser } from '../lib/firestore';
+import logoFull from '../assets/logo-full.png';
 
 export default function DashboardPage() {
-  const { user, role, isAdmin } = useAuth();
+  const { user } = useAuth();
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -65,17 +66,26 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <section className="rounded-2xl bg-gradient-to-r from-slate-900 to-slate-700 p-6 text-white shadow-sm">
-        <h2 className="text-2xl font-bold">
-          Welcome back, {user?.displayName?.split(' ')[0] || 'User'}
-        </h2>
-        <p className="mt-2 max-w-2xl text-sm text-slate-200">
-          Track your work sessions, store notes, and keep monthly totals organized.
-        </p>
+        <div className="flex flex-col items-center text-center sm:flex-row sm:items-center sm:gap-6 sm:text-left">
+          <img
+            src={logoFull}
+            alt="Positive Adversity logo"
+            className="mb-4 h-28 w-auto sm:mb-0 sm:h-32"
+          />
 
-        <div className="mt-4 text-sm text-slate-200">
-          <div>Email: {user?.email || '—'}</div>
-          <div>Role: {role}</div>
-          <div>Admin: {isAdmin ? 'Yes' : 'No'}</div>
+          <div>
+            <h2 className="text-2xl font-bold">
+              Welcome back, {user?.displayName?.split(' ')[0] || 'User'}
+            </h2>
+
+            <p className="mt-2 max-w-2xl text-sm text-slate-200">
+              Track your work sessions, store notes, and keep monthly totals organized.
+            </p>
+
+            <div className="mt-4 text-sm text-slate-200">
+              <div>Email: {user?.email || '—'}</div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -91,6 +101,7 @@ export default function DashboardPage() {
           emptyMessage="No work sessions logged yet for this account."
           showStudent={true}
           showInternalTotals={false}
+          showTimes={true}
         />
       )}
     </div>

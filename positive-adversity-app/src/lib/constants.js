@@ -1,3 +1,8 @@
+export const SERVICE_OPTIONS = [
+  { value: "DCF", label: "DCF" },
+  { value: "Mashantucket", label: "Mashantucket" },
+];
+
 export const SERVICE_RATES = {
   DCF: {
     client: 25,
@@ -8,5 +13,3 @@ export const SERVICE_RATES = {
     internal: 50,
   },
 };
-
-export const SERVICE_OPTIONS = Object.keys(SERVICE_RATES);

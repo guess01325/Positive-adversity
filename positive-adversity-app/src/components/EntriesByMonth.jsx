@@ -1,28 +1,94 @@
-import { useMemo } from 'react';
-import { formatCurrency } from '../lib/utils';
+import { useMemo, useState } from "react";
+
+function formatMoney(value) {
+  return `$${Number(value || 0).toFixed(2)}`;
+}
+
+function formatDate(value) {
+  if (!value) return "-";
+
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+
+  return d.toLocaleDateString();
+}
+
+function formatTime(value) {
+  if (!value) return "-";
+
+  if (typeof value === "string" && /^\d{2}:\d{2}$/.test(value)) {
+    const [hourString, minute] = value.split(":");
+    const hour = Number(hourString);
+
+    if (Number.isNaN(hour)) return value;
+
+    const suffix = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour % 12 || 12;
+
+    return `${displayHour}:${minute} ${suffix}`;
+  }
+
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+
+  return d.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function getEntryDate(entry) {
+  return entry?.date || formatDate(entry?.startTime);
+}
+
+function getInternalTotal(entry) {
+  const hours = Number(entry?.hours || 0);
+  const internalRate = Number(entry?.internalRate || 0);
+
+  if (entry?.internalTotal != null) {
+    return Number(entry.internalTotal || 0);
+  }
+
+  return Number((hours * internalRate).toFixed(2));
+}
+
+function groupEntriesByMonth(entries) {
+  return entries.reduce((acc, entry) => {
+    const monthKey =
+      entry.monthKey ||
+      (entry.date ? entry.date.slice(0, 7) : "Unknown Month");
+
+    if (!acc[monthKey]) {
+      acc[monthKey] = [];
+    }
+
+    acc[monthKey].push(entry);
+    return acc;
+  }, {});
+}
+
+function truncateText(text, maxLength = 180) {
+  const value = String(text || "").trim();
+  if (!value) return "";
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength).trim()}...`;
+}
 
 export default function EntriesByMonth({
-  entries,
-  emptyMessage = 'No entries found.',
-  showInternalTotals = false,
+  entries = [],
+  emptyMessage = "No entries found.",
   showStudent = false,
+  showInternalTotals = false,
   showAdminActions = false,
+  showTimes = true,
   onEdit,
   onDelete,
 }) {
+  const [selectedNote, setSelectedNote] = useState(null);
+
   const groupedEntries = useMemo(() => {
-    const groups = entries.reduce((acc, entry) => {
-      const month = entry.monthKey || 'No Month';
-
-      if (!acc[month]) {
-        acc[month] = [];
-      }
-
-      acc[month].push(entry);
-      return acc;
-    }, {});
-
-    return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+    const grouped = groupEntriesByMonth(entries);
+    return Object.entries(grouped).sort(([a], [b]) => b.localeCompare(a));
   }, [entries]);
 
   if (!entries.length) {
@@ -34,184 +100,220 @@ export default function EntriesByMonth({
   }
 
   return (
-    <div className="space-y-6">
-      {groupedEntries.map(([month, monthEntries]) => {
-        const monthTotals = monthEntries.reduce(
-          (acc, entry) => {
-            acc.hours += Number(entry.hours || 0);
-            acc.clientPay += Number(entry.totalPay || 0);
-            acc.internalPay += Number(entry.internalTotal || 0);
-            acc.count += 1;
-            return acc;
-          },
-          { hours: 0, clientPay: 0, internalPay: 0, count: 0 }
-        );
+    <>
+      <div className="space-y-6">
+        {groupedEntries.map(([month, monthEntries]) => {
+          const monthTotals = monthEntries.reduce(
+            (acc, entry) => {
+              const hours = Number(entry.hours || 0);
+              const totalPay = Number(entry.totalPay || 0);
+              const internalTotal = getInternalTotal(entry);
 
-        return (
-          <section
-            key={month}
-            className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-          >
-            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h3 className="text-xl font-semibold text-slate-900">{month}</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  {monthTotals.count} entries • {monthTotals.hours.toFixed(2)} hours
-                </p>
-              </div>
+              acc.hours += hours;
+              acc.totalPay += totalPay;
+              acc.internalTotal += internalTotal;
 
-              <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-                <div className="rounded-xl bg-slate-100 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Client Pay
-                  </p>
-                  <p className="mt-1 text-lg font-semibold text-slate-900">
-                    {formatCurrency(monthTotals.clientPay)}
-                  </p>
-                </div>
+              return acc;
+            },
+            {
+              hours: 0,
+              totalPay: 0,
+              internalTotal: 0,
+            }
+          );
 
-                {showInternalTotals && (
-                  <div className="rounded-xl bg-slate-100 px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Internal Pay
-                    </p>
-                    <p className="mt-1 text-lg font-semibold text-slate-900">
-                      {formatCurrency(monthTotals.internalPay)}
+          return (
+            <section key={month} className="space-y-4">
+              <div className="rounded-2xl bg-white p-4 shadow-sm">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900">
+                      {month}
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      {monthEntries.length} entr{monthEntries.length === 1 ? "y" : "ies"}
                     </p>
                   </div>
-                )}
-              </div>
-            </div>
 
-            <div className="space-y-4">
-              {monthEntries.map((entry, index) => (
-                <div
-                  key={entry.id || `${entry.date}-${entry.serviceType}-${index}`}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                >
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Date
-                      </p>
-                      <p className="mt-1 text-sm font-medium text-slate-900">
-                        {entry.date || '—'}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Service Type
-                      </p>
-                      <p className="mt-1 text-sm font-medium text-slate-900">
-                        {entry.serviceType || '—'}
-                      </p>
-                    </div>
-
-                    {showStudent && (
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Student
-                        </p>
-                        <p className="mt-1 text-sm font-medium text-slate-900">
-                          {entry.student || '—'}
-                        </p>
-                      </div>
-                    )}
-
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <div
+                    className={`grid gap-3 sm:grid-cols-2 ${
+                      showInternalTotals ? "lg:grid-cols-3" : "lg:grid-cols-2"
+                    }`}
+                  >
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                         Hours
                       </p>
-                      <p className="mt-1 text-sm font-medium text-slate-900">
-                        {Number(entry.hours || 0).toFixed(2)}
+                      <p className="mt-1 text-base font-bold text-slate-900">
+                        {monthTotals.hours.toFixed(2)}
                       </p>
                     </div>
 
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Client Rate
-                      </p>
-                      <p className="mt-1 text-sm font-medium text-slate-900">
-                        {formatCurrency(Number(entry.hourlyRate || 0))}/hr
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                         Client Total
                       </p>
-                      <p className="mt-1 text-sm font-medium text-slate-900">
-                        {formatCurrency(Number(entry.totalPay || 0))}
+                      <p className="mt-1 text-base font-bold text-slate-900">
+                        {formatMoney(monthTotals.totalPay)}
                       </p>
                     </div>
 
                     {showInternalTotals && (
-                      <>
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Internal Rate
-                          </p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">
-                            {formatCurrency(Number(entry.internalRate || 0))}/hr
-                          </p>
-                        </div>
-
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Internal Total
-                          </p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">
-                            {formatCurrency(Number(entry.internalTotal || 0))}
-                          </p>
-                        </div>
-                      </>
+                      <div className="rounded-xl bg-slate-50 p-3">
+                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                          Internal Total
+                        </p>
+                        <p className="mt-1 text-base font-bold text-slate-900">
+                          {formatMoney(monthTotals.internalTotal)}
+                        </p>
+                      </div>
                     )}
                   </div>
-
-                  <div className="mt-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Note
-                    </p>
-                    <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">
-                      {entry.note || '—'}
-                    </p>
-                  </div>
-
-                  {entry.userName && (
-                    <div className="mt-4">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Staff Member
-                      </p>
-                      <p className="mt-1 text-sm text-slate-700">{entry.userName}</p>
-                    </div>
-                  )}
-
-                  {showAdminActions && (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onEdit?.(entry)}
-                        className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white"
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => onDelete?.(entry.id)}
-                        className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  )}
                 </div>
-              ))}
+              </div>
+
+              <div className="space-y-4">
+                {monthEntries.map((entry) => {
+                  const internalTotal = getInternalTotal(entry);
+                  const noteValue = String(entry.note || "").trim();
+                  const truncatedNote = truncateText(noteValue, 180);
+                  const hasLongNote = noteValue.length > 180;
+
+                  return (
+                    <div
+                      key={entry.id}
+                      className="rounded-2xl bg-white p-5 shadow-sm"
+                    >
+                      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                        <div className="space-y-1 min-w-0 flex-1">
+                          {showStudent && (
+                            <p className="text-lg font-semibold text-slate-900">
+                              {entry.student || "No student"}
+                            </p>
+                          )}
+
+                          <p className="text-sm text-slate-600">
+                            <span className="font-medium">User:</span>{" "}
+                            {entry.userName || entry.userEmail || entry.userId || "-"}
+                          </p>
+
+                          <p className="text-sm text-slate-600">
+                            <span className="font-medium">Service:</span>{" "}
+                            {entry.serviceType || "-"}
+                          </p>
+
+                          <p className="text-sm text-slate-600">
+                            <span className="font-medium">Date:</span>{" "}
+                            {getEntryDate(entry)}
+                          </p>
+
+                          {showTimes && (
+                            <p className="text-sm text-slate-600">
+                              <span className="font-medium">Time:</span>{" "}
+                              {formatTime(entry.startTime)} - {formatTime(entry.endTime)}
+                            </p>
+                          )}
+
+                          <p className="text-sm text-slate-600">
+                            <span className="font-medium">Hours:</span>{" "}
+                            {Number(entry.hours || 0).toFixed(2)}
+                          </p>
+
+                          <p className="text-sm text-slate-600">
+                            <span className="font-medium">Client Rate:</span>{" "}
+                            {formatMoney(entry.hourlyRate || 0)}
+                          </p>
+
+                          <p className="text-sm text-slate-600">
+                            <span className="font-medium">Client Total:</span>{" "}
+                            {formatMoney(entry.totalPay || 0)}
+                          </p>
+
+                          {showInternalTotals && (
+                            <>
+                              <p className="text-sm text-slate-600">
+                                <span className="font-medium">Internal Rate:</span>{" "}
+                                {formatMoney(entry.internalRate || 0)}
+                              </p>
+
+                              <p className="text-sm text-slate-600">
+                                <span className="font-medium">Internal Total:</span>{" "}
+                                {formatMoney(internalTotal)}
+                              </p>
+                            </>
+                          )}
+
+                          {noteValue && (
+                            <div className="pt-2">
+                              <p className="text-sm text-slate-700 break-words">
+                                <span className="font-medium">Note:</span>{" "}
+                                {truncatedNote}
+                              </p>
+
+                              {hasLongNote && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedNote(noteValue)}
+                                  className="mt-2 text-sm font-medium text-slate-700 underline hover:text-slate-900"
+                                >
+                                  View full note
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {showAdminActions && (
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => onEdit?.(entry)}
+                              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                            >
+                              Edit
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => onDelete?.(entry.id)}
+                              className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+
+      {selectedNote && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <h3 className="text-lg font-semibold text-slate-900">Full Note</h3>
+              <button
+                type="button"
+                onClick={() => setSelectedNote(null)}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
             </div>
-          </section>
-        );
-      })}
-    </div>
+
+            <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
+              <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
+                {selectedNote}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
