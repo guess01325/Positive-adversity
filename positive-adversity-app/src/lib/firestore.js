@@ -10,6 +10,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { isAdminEmail } from './utils';
@@ -282,4 +283,48 @@ export async function deleteAdjustment(adjustmentId) {
 
   const adjustmentRef = doc(db, 'invoiceAdjustments', adjustmentId);
   await deleteDoc(adjustmentRef);
+}
+
+export async function anonymizeEntriesForDeletedUser(uid) {
+  if (!uid) {
+    throw new Error('Missing uid for entry anonymization.');
+  }
+
+  const q = query(collection(db, 'entries'), where('userId', '==', uid));
+  const snapshot = await getDocs(q);
+
+  if (snapshot.empty) {
+    return 0;
+  }
+
+  const docs = snapshot.docs;
+  const batchSize = 400;
+  let updatedCount = 0;
+
+  for (let i = 0; i < docs.length; i += batchSize) {
+    const chunk = docs.slice(i, i + batchSize);
+    const batch = writeBatch(db);
+
+    chunk.forEach((entryDoc) => {
+      batch.update(entryDoc.ref, {
+        userEmail: '',
+        userName: 'Deleted User',
+        accountDeleted: true,
+        deletedAt: serverTimestamp(),
+      });
+    });
+
+    await batch.commit();
+    updatedCount += chunk.length;
+  }
+
+  return updatedCount;
+}
+
+export async function deleteUserProfile(uid) {
+  if (!uid) {
+    throw new Error('Missing uid for profile delete.');
+  }
+
+  await deleteDoc(doc(db, 'users', uid));
 }
