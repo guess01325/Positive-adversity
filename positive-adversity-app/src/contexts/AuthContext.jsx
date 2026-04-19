@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
@@ -7,64 +7,105 @@ import {
   signInWithCredential,
   GoogleAuthProvider,
   signOut,
-} from 'firebase/auth';
-import { Capacitor } from '@capacitor/core';
-import { GoogleSignIn } from '@capawesome/capacitor-google-sign-in';
+} from "firebase/auth";
+import { Capacitor } from "@capacitor/core";
+import { GoogleSignIn } from "@capawesome/capacitor-google-sign-in";
 
-import { auth, googleProvider, GOOGLE_WEB_CLIENT_ID } from '../lib/firebase';
-import { getUserRole, upsertUserProfile } from '../lib/firestore';
-import { isAdminEmail } from '../lib/utils';
+import { auth } from "../lib/firebase";
+import { getUserRole, upsertUserProfile } from "../lib/firestore";
+import { isAdminEmail } from "../lib/utils";
 
 const AuthContext = createContext(null);
 
+const GOOGLE_WEB_CLIENT_ID =
+  "224541354644-41o3c3730drbbagg79sinln18kbrnnnb.apps.googleusercontent.com";
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [role, setRole] = useState('user');
+  const [role, setRole] = useState("user");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
     const initGoogle = async () => {
       try {
-        if (Capacitor.isNativePlatform()) {
-          console.log('Init GOOGLE_WEB_CLIENT_ID:', GOOGLE_WEB_CLIENT_ID);
+        if (!Capacitor.isNativePlatform()) return;
 
-          await GoogleSignIn.initialize({
-            clientId: GOOGLE_WEB_CLIENT_ID,
-          });
-        }
+        const platform = Capacitor.getPlatform();
+        if (platform !== "ios" && platform !== "android") return;
+
+        await GoogleSignIn.initialize({
+          clientId: GOOGLE_WEB_CLIENT_ID,
+        });
       } catch (error) {
-        console.error('Google Sign-In initialize error:', error);
+        console.error("Google Sign-In initialize error:", error);
       }
     };
 
     initGoogle();
 
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      try {
-        if (!currentUser) {
-          setUser(null);
-          setRole('user');
-          setLoading(false);
-          return;
-        }
-
-        const admin = isAdminEmail(currentUser.email);
-
-        await upsertUserProfile(currentUser, admin);
-        const storedRole = await getUserRole(currentUser.uid);
-
-        setUser(currentUser);
-        setRole(admin ? 'admin' : storedRole || 'user');
-      } catch (error) {
-        console.error('AuthContext error:', error);
-        setUser(currentUser || null);
-        setRole('user');
-      } finally {
+    const fallbackTimer = setTimeout(() => {
+      if (isMounted) {
         setLoading(false);
       }
-    });
+    }, 5000);
 
-    return () => unsubscribe();
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      async (currentUser) => {
+        clearTimeout(fallbackTimer);
+
+        try {
+          if (!currentUser) {
+            if (!isMounted) return;
+            setUser(null);
+            setRole("user");
+            setLoading(false);
+            return;
+          }
+
+          const admin = isAdminEmail(currentUser.email);
+
+          if (!isMounted) return;
+          setUser(currentUser);
+          setRole(admin ? "admin" : "user");
+          setLoading(false);
+
+          try {
+            await upsertUserProfile(currentUser, admin);
+            const storedRole = await getUserRole(currentUser.uid);
+
+            if (!isMounted) return;
+            setRole(admin ? "admin" : storedRole || "user");
+          } catch (profileError) {
+            console.error("Profile bootstrap error:", profileError);
+          }
+        } catch (error) {
+          console.error("AuthContext error:", error);
+
+          if (!isMounted) return;
+          setUser(currentUser || null);
+          setRole("user");
+          setLoading(false);
+        }
+      },
+      (error) => {
+        clearTimeout(fallbackTimer);
+        console.error("onAuthStateChanged listener error:", error);
+
+        if (!isMounted) return;
+        setUser(null);
+        setRole("user");
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      clearTimeout(fallbackTimer);
+      unsubscribe();
+    };
   }, []);
 
   async function signInWithGoogle() {
@@ -72,29 +113,41 @@ export function AuthProvider({ children }) {
       if (Capacitor.isNativePlatform()) {
         const result = await GoogleSignIn.signIn();
 
-        console.log('Native Google sign-in result:', result);
-        console.log('Native Google sign-in JSON:', JSON.stringify(result, null, 2));
-        console.log('GOOGLE_WEB_CLIENT_ID:', GOOGLE_WEB_CLIENT_ID);
-
         const idToken =
-          result?.authentication?.idToken ||
           result?.idToken ||
+          result?.authentication?.idToken ||
+          result?.authentication?.accessToken ||
           null;
 
-        if (!idToken) {
-          throw new Error('Missing Google ID token.');
+        const accessToken =
+          result?.accessToken ||
+          result?.authentication?.accessToken ||
+          null;
+
+        if (!idToken && !accessToken) {
+          throw new Error("Missing Google auth token.");
         }
 
-        const credential = GoogleAuthProvider.credential(idToken);
-        await signInWithCredential(auth, credential);
-        return;
+        const credential = GoogleAuthProvider.credential(idToken, accessToken);
+        const authResult = await signInWithCredential(auth, credential);
+        return authResult.user;
       }
 
-      await signInWithPopup(auth, googleProvider);
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+
+      const authResult = await signInWithPopup(auth, provider);
+      return authResult.user;
     } catch (error) {
-      console.error('Google sign-in failed:', error);
+      console.error("Google sign-in failed:", error);
       throw error;
     }
+  }
+
+  async function signInWithApple() {
+    throw new Error(
+      "Apple Sign-In UI can be added now, but native Apple sign-in still needs Apple Developer account setup before it can be wired."
+    );
   }
 
   async function signUpWithEmail(email, password) {
@@ -102,7 +155,12 @@ export function AuthProvider({ children }) {
     const result = await createUserWithEmailAndPassword(auth, cleanEmail, password);
 
     const admin = isAdminEmail(cleanEmail);
-    await upsertUserProfile(result.user, admin);
+
+    try {
+      await upsertUserProfile(result.user, admin);
+    } catch (error) {
+      console.error("Sign up profile write error:", error);
+    }
 
     return result.user;
   }
@@ -118,7 +176,7 @@ export function AuthProvider({ children }) {
       try {
         await GoogleSignIn.signOut();
       } catch (error) {
-        console.error('Native Google sign-out error:', error);
+        console.error("Native Google sign-out error:", error);
       }
     }
 
@@ -129,9 +187,10 @@ export function AuthProvider({ children }) {
     () => ({
       user,
       role,
-      isAdmin: role === 'admin',
+      isAdmin: role === "admin",
       loading,
       signInWithGoogle,
+      signInWithApple,
       signUpWithEmail,
       signInWithEmail,
       logout,
@@ -146,7 +205,7 @@ export function useAuth() {
   const context = useContext(AuthContext);
 
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
 
   return context;

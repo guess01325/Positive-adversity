@@ -11,36 +11,45 @@ import { useAuth } from './contexts/AuthContext';
 export default function App() {
   const { user, loading } = useAuth();
 
-  if (loading) return <div>Loading...</div>;
+  console.log('App render:', {
+    loading,
+    user: user?.email || null,
+  });
+
+  if (loading) {
+    return (
+      <div style={{ padding: 24, fontSize: 18 }}>
+        App loading...
+      </div>
+    );
+  }
 
   return (
     <Routes>
-      <Route
-        path="/login"
-        element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />}
-      />
-
-      <Route
-        path="/"
-        element={user ? <Layout /> : <Navigate to="/login" replace />}
-      >
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard" element={<DashboardPage />} />
-        <Route path="profile" element={<ProfilePage />} />
-        <Route
-          path="admin"
-          element={
-            <AdminRoute>
-              <AdminPage />
-            </AdminRoute>
-          }
-        />
-      </Route>
-
-      <Route path="*" element={<NotFoundPage />} />
+      {!user ? (
+        <>
+          <Route path="/" element={<LoginPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </>
+      ) : (
+        <>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="profile" element={<ProfilePage />} />
+            <Route
+              path="admin"
+              element={
+                <AdminRoute>
+                  <AdminPage />
+                </AdminRoute>
+              }
+            />
+          </Route>
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </>
+      )}
     </Routes>
   );
 }
-
-
-
