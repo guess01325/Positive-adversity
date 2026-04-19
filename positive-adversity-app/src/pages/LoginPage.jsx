@@ -2,13 +2,18 @@ import { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function LoginPage() {
-const { signInWithGoogle, signInWithApple, signInWithEmail, signUpWithEmail } = useAuth();
+  const {
+    signInWithGoogle,
+    signInWithApple,
+    signInWithEmail,
+    signUpWithEmail,
+  } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [authLoading, setAuthLoading] = useState(null); // 'google' | 'apple' | 'email' | null
-  const [mode, setMode] = useState("signin"); // 'signin' or 'signup'
+  const [authLoading, setAuthLoading] = useState(null);
+  const [mode, setMode] = useState("signin");
 
   async function handleGoogleSignIn() {
     try {
@@ -16,43 +21,52 @@ const { signInWithGoogle, signInWithApple, signInWithEmail, signUpWithEmail } = 
       setErrorMessage("");
       await signInWithGoogle();
     } catch (error) {
+      console.error("LOGIN PAGE GOOGLE ERROR:", error);
       setErrorMessage(error?.message || "Google sign-in failed.");
     } finally {
       setAuthLoading(null);
     }
   }
 
-async function handleAppleSignIn() {
-  try {
-    setAuthLoading("apple");
-    setErrorMessage("");
-    await signInWithApple();
-  } catch (error) {
-    setErrorMessage(error?.message || "Apple sign-in failed.");
-  } finally {
-    setAuthLoading(null);
+  async function handleAppleSignIn() {
+    try {
+      setAuthLoading("apple");
+      setErrorMessage("");
+      await signInWithApple();
+    } catch (error) {
+      console.error("LOGIN PAGE APPLE ERROR:", error);
+      setErrorMessage(error?.message || "Apple sign-in failed.");
+    } finally {
+      setAuthLoading(null);
+    }
   }
-}
 
   async function handleEmailSubmit(e) {
     e.preventDefault();
-
-    if (!email.trim() || !password.trim()) {
-      setErrorMessage("Please enter both email and password.");
-      return;
-    }
 
     try {
       setAuthLoading("email");
       setErrorMessage("");
 
+      const cleanEmail = email.trim().toLowerCase();
+
+      if (!cleanEmail || !password) {
+        throw new Error("Email and password are required.");
+      }
+
       if (mode === "signup") {
-        await signUpWithEmail(email, password);
+        await signUpWithEmail(cleanEmail, password);
       } else {
-        await signInWithEmail(email, password);
+        await signInWithEmail(cleanEmail, password);
       }
     } catch (error) {
-      setErrorMessage(error?.message || "Authentication failed.");
+      console.error("LOGIN PAGE EMAIL ERROR:", error);
+      setErrorMessage(
+        error?.message ||
+          (mode === "signup"
+            ? "Account creation failed."
+            : "Email sign-in failed.")
+      );
     } finally {
       setAuthLoading(null);
     }
@@ -154,7 +168,7 @@ async function handleAppleSignIn() {
         <button
           type="submit"
           disabled={!!authLoading}
-          className="w-full rounded-xl bg-slate-700 px-4 py-3 text-sm font-medium text-white hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {authLoading === "email"
             ? "Please wait..."
