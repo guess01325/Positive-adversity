@@ -120,6 +120,23 @@ export async function exportEntriesPdf({
   doc.text("www.positiveadversity.org", 36, 26);
   doc.text("(860) 625-6656", 36, 32);
 
+  // ADDITION: RIGHT-SIDE DBA BLOCK
+  const rightX = pageWidth - 10;
+  doc.setFont("times", "bold");
+  doc.setFontSize(11);
+  doc.text("DBA: Positive Adversity Youth Services Inc.", rightX, 14, {
+    align: "right",
+  });
+  doc.text("Allan V. Chaney, LLC", rightX, 20, {
+    align: "right",
+  });
+  doc.text("43 Granada Terrace", rightX, 26, {
+    align: "right",
+  });
+  doc.text("New London, CT 06320", rightX, 32, {
+    align: "right",
+  });
+
   doc.setDrawColor(220, 220, 220);
   doc.line(10, 40, pageWidth - 10, 40);
 
@@ -214,6 +231,23 @@ export async function exportEntriesPdf({
     doc.text("www.positiveadversity.org", 36, 26);
     doc.text("(860) 625-6656", 36, 32);
 
+    // ADDITION: RIGHT-SIDE DBA BLOCK ON NEW PAGE TOO
+    const rightX = pageWidth - 10;
+    doc.setFont("times", "bold");
+    doc.setFontSize(11);
+    doc.text("DBA: Positive Adversity Youth Services Inc.", rightX, 14, {
+      align: "right",
+    });
+    doc.text("Allan V. Chaney, LLC", rightX, 20, {
+      align: "right",
+    });
+    doc.text("43 Granada Terrace", rightX, 26, {
+      align: "right",
+    });
+    doc.text("New London, CT 06320", rightX, 32, {
+      align: "right",
+    });
+
     doc.setDrawColor(220, 220, 220);
     doc.line(10, 40, pageWidth - 10, 40);
 
@@ -225,8 +259,17 @@ export async function exportEntriesPdf({
 
   doc.text(`Entries: ${totals.entries}`, 10, summaryY);
   doc.text(`Hours: ${totals.hours.toFixed(2)}`, 70, summaryY);
-  doc.text(`DCF Supervision: ${formatCurrency(dcfSupervisionAmount)}`, 130, summaryY);
-  doc.text(`Internal Total: ${formatCurrency(finalInternalTotal)}`, 287, summaryY, { align: "right" });
+  doc.text(
+    `DCF Supervision: ${formatCurrency(dcfSupervisionAmount)}`,
+    130,
+    summaryY
+  );
+  doc.text(
+    `Internal Total: ${formatCurrency(finalInternalTotal)}`,
+    287,
+    summaryY,
+    { align: "right" }
+  );
 
   const fileName = `positive_adversity_report.pdf`;
 

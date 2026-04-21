@@ -1,8 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
-  createUserWithEmailAndPassword,
   onAuthStateChanged,
-  signInWithEmailAndPassword,
   signInWithPopup,
   signInWithCredential,
   GoogleAuthProvider,
@@ -259,35 +257,6 @@ export function AuthProvider({ children }) {
     }
   }
 
-  async function signUpWithEmail(email, password) {
-    const cleanEmail = email.trim().toLowerCase();
-    const result = await createUserWithEmailAndPassword(
-      auth,
-      cleanEmail,
-      password
-    );
-
-    const admin = isAdminEmail(cleanEmail);
-
-    try {
-      await upsertUserProfile(result.user, admin);
-    } catch (error) {
-      console.error("Sign up profile write error:", error);
-    }
-
-    return result.user;
-  }
-
-  async function signInWithEmail(email, password) {
-    const cleanEmail = email.trim().toLowerCase();
-    const result = await signInWithEmailAndPassword(
-      auth,
-      cleanEmail,
-      password
-    );
-    return result.user;
-  }
-
   async function logout() {
     if (Capacitor.isNativePlatform()) {
       try {
@@ -310,8 +279,6 @@ export function AuthProvider({ children }) {
       loading,
       signInWithGoogle,
       signInWithApple,
-      signUpWithEmail,
-      signInWithEmail,
       logout,
     }),
     [user, role, loading]
