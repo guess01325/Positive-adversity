@@ -130,7 +130,7 @@ export default function EntryForm({ onSubmit, submitting }) {
         </div>
       </div>
 
-      <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
+      <form className="grid w-full max-w-full gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
         <div>
           <label
             htmlFor="serviceType"

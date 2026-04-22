@@ -1,6 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
+  createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signInWithCredential,
   GoogleAuthProvider,
@@ -9,10 +12,7 @@ import {
 } from "firebase/auth";
 import { Capacitor } from "@capacitor/core";
 import { GoogleSignIn } from "@capawesome/capacitor-google-sign-in";
-import {
-  AppleSignIn,
-  SignInScope,
-} from "@capawesome/capacitor-apple-sign-in";
+import { AppleSignIn, SignInScope } from "@capawesome/capacitor-apple-sign-in";
 
 import { auth } from "../lib/firebase";
 import { getUserRole, upsertUserProfile } from "../lib/firestore";
@@ -24,8 +24,13 @@ const GOOGLE_WEB_CLIENT_ID =
   "224541354644-41o3c3730drbbagg79sinln18kbrnnnb.apps.googleusercontent.com";
 
 const APPLE_SERVICE_ID = "com.positiveadversity.mobile.auth";
-const APPLE_REDIRECT_URL =
-  "https://positive-adversity-app.firebaseapp.com/__/auth/handler";
+
+const ALLOWED_EMAILS = [
+  "client@email.com",
+  "admin@email.com",
+  "oguess01325@yahoo.com",
+  "guess01325@gmail.com"
+];
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -46,7 +51,21 @@ export function AuthProvider({ children }) {
         }
 
         const normalizedUser = normalizeUser(incomingUser);
-        const admin = isAdminEmail(normalizedUser.email);
+        const userEmail = (normalizedUser.email || "").trim().toLowerCase();
+
+        if (!ALLOWED_EMAILS.includes(userEmail)) {
+          console.warn("Unauthorized email:", normalizedUser.email);
+
+          await signOut(auth);
+
+          if (!isMounted) return;
+          setUser(null);
+          setRole("user");
+          setLoading(false);
+          return;
+        }
+
+        const admin = isAdminEmail(userEmail);
 
         if (!isMounted) return;
         setUser(normalizedUser);
@@ -87,7 +106,7 @@ export function AuthProvider({ children }) {
           }
         }
 
-        if (platform === "android" || platform === "web") {
+        if (platform === "ios") {
           try {
             await AppleSignIn.initialize({
               clientId: APPLE_SERVICE_ID,
@@ -113,7 +132,6 @@ export function AuthProvider({ children }) {
       auth,
       async (currentUser) => {
         clearTimeout(fallbackTimer);
-        console.log("AUTH LISTENER FIRED:", currentUser);
         await applyUserState(currentUser);
       },
       (error) => {
@@ -124,7 +142,7 @@ export function AuthProvider({ children }) {
         setUser(null);
         setRole("user");
         setLoading(false);
-      }
+      },
     );
 
     return () => {
@@ -148,9 +166,7 @@ export function AuthProvider({ children }) {
           null;
 
         const accessToken =
-          result?.accessToken ||
-          result?.authentication?.accessToken ||
-          null;
+          result?.accessToken || result?.authentication?.accessToken || null;
 
         if (!idToken && !accessToken) {
           throw new Error("Missing Google auth token.");
@@ -173,37 +189,30 @@ export function AuthProvider({ children }) {
   }
 
   async function signInWithApple() {
-    try {
-      console.log("AUTH DEBUG 1: entered signInWithApple");
+    const platform = Capacitor.getPlatform();
 
+    if (platform !== "ios") {
+      throw new Error("Apple sign-in is only available on iPhone in this app.");
+    }
+
+    try {
       const provider = new OAuthProvider("apple.com");
       const rawNonce = generateNonce();
       const hashedNonce = await sha256(rawNonce);
-      const platform = Capacitor.getPlatform();
 
-      console.log("AUTH DEBUG 2: platform =", platform);
+      await AppleSignIn.initialize({
+        clientId: APPLE_SERVICE_ID,
+      });
 
       const result = await AppleSignIn.signIn({
         scopes: [SignInScope.Email, SignInScope.FullName],
         nonce: hashedNonce,
-        redirectUrl:
-          platform === "android" || platform === "web"
-            ? APPLE_REDIRECT_URL
-            : undefined,
-        state:
-          platform === "android" || platform === "web"
-            ? generateState()
-            : undefined,
       });
-
-      console.log("AUTH DEBUG 3: Apple result =", result);
 
       const idToken = result?.idToken || result?.identityToken || null;
 
       if (!idToken) {
-        throw new Error(
-          `Missing Apple ID token. Result: ${JSON.stringify(result)}`
-        );
+        throw new Error("Missing Apple ID token");
       }
 
       const credential = provider.credential({
@@ -211,13 +220,7 @@ export function AuthProvider({ children }) {
         rawNonce,
       });
 
-      console.log("AUTH DEBUG 4: Firebase credential created");
-      console.log("AUTH DEBUG 4.1: before signInWithCredential");
-
       const authResult = await signInWithCredential(auth, credential);
-
-      console.log("AUTH DEBUG 4.2: signInWithCredential returned", authResult);
-      console.log("AUTH DEBUG 5: Firebase Apple sign-in success", authResult?.user);
 
       if (authResult?.user) {
         const normalizedUser = normalizeUser(authResult.user);
@@ -233,28 +236,51 @@ export function AuthProvider({ children }) {
         } catch (profileError) {
           console.error(
             "Profile bootstrap error after Apple sign-in:",
-            profileError
+            profileError,
           );
         }
       }
 
       return authResult.user;
     } catch (error) {
-      console.error("APPLE SIGN-IN FULL ERROR:", error);
-      console.error("APPLE SIGN-IN ERROR CODE:", error?.code);
-      console.error("APPLE SIGN-IN ERROR MESSAGE:", error?.message);
-
-      try {
-        console.error(
-          "APPLE SIGN-IN ERROR STRINGIFIED:",
-          JSON.stringify(error, Object.getOwnPropertyNames(error))
-        );
-      } catch (jsonError) {
-        console.error("APPLE SIGN-IN stringify failed:", jsonError);
-      }
-
+      console.error("APPLE SIGN-IN ERROR:", error);
       throw error;
     }
+  }
+
+  async function signUpWithEmail(email, password) {
+    const cleanEmail = email.trim().toLowerCase();
+    const result = await createUserWithEmailAndPassword(
+      auth,
+      cleanEmail,
+      password,
+    );
+
+    const admin = isAdminEmail(cleanEmail);
+
+    try {
+      await upsertUserProfile(result.user, admin);
+    } catch (error) {
+      console.error("Sign up profile write error:", error);
+    }
+
+    return result.user;
+  }
+
+  async function signInWithEmail(email, password) {
+    const cleanEmail = email.trim().toLowerCase();
+    const result = await signInWithEmailAndPassword(auth, cleanEmail, password);
+    return result.user;
+  }
+
+  async function resetPassword(email) {
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanEmail) {
+      throw new Error("Please enter your email first.");
+    }
+
+    await sendPasswordResetEmail(auth, cleanEmail);
   }
 
   async function logout() {
@@ -279,9 +305,12 @@ export function AuthProvider({ children }) {
       loading,
       signInWithGoogle,
       signInWithApple,
+      signUpWithEmail,
+      signInWithEmail,
+      resetPassword,
       logout,
     }),
-    [user, role, loading]
+    [user, role, loading],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -307,10 +336,6 @@ function generateNonce(length = 32) {
     nonce += charset[randomValues[i] % charset.length];
   }
   return nonce;
-}
-
-function generateState(length = 32) {
-  return generateNonce(length);
 }
 
 async function sha256(text) {
