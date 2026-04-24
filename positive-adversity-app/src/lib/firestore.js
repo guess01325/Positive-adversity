@@ -13,7 +13,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { isAdminEmail } from './utils';
+
 
 export async function upsertUserProfile(user) {
   if (!user?.uid) {
@@ -23,22 +23,20 @@ export async function upsertUserProfile(user) {
   const userRef = doc(db, 'users', user.uid);
   const existing = await getDoc(userRef);
 
-  const admin = isAdminEmail(user.email);
-  const role = admin ? 'admin' : 'user';
+  const normalizedEmail = (user.email || '').trim().toLowerCase();
 
   const baseData = {
     uid: user.uid,
-    email: user.email || '',
-    displayName: user.displayName || '',
+    email: normalizedEmail,
+    displayName: user.displayName || normalizedEmail,
     photoURL: user.photoURL || '',
-    role,
-    isAdmin: admin,
     updatedAt: serverTimestamp(),
   };
 
   if (!existing.exists()) {
     await setDoc(userRef, {
       ...baseData,
+      role: 'user',
       createdAt: serverTimestamp(),
     });
     return;
@@ -50,11 +48,7 @@ export async function upsertUserProfile(user) {
     userRef,
     {
       ...baseData,
-      role: existingData.role || role,
-      isAdmin:
-        typeof existingData.isAdmin === 'boolean'
-          ? existingData.isAdmin
-          : admin,
+      role: existingData.role || 'user',
       createdAt: existingData.createdAt || serverTimestamp(),
     },
     { merge: true }

@@ -281,12 +281,12 @@ export async function exportEntriesPdf({
   const arrayBuffer = doc.output("arraybuffer");
   const base64Data = uint8ToBase64(new Uint8Array(arrayBuffer));
 
-  const result = await Filesystem.writeFile({
-    path: fileName,
-    data: base64Data,
-    directory: Directory.Documents,
-    recursive: true,
-  });
+const result = await Filesystem.writeFile({
+  path: fileName,
+  data: base64Data,
+  directory: Directory.Cache,
+  recursive: true,
+});
 
   await Share.share({
     title: "Positive Adversity Report",
