@@ -12,48 +12,34 @@ export default function Layout() {
   const email = user?.email || "";
   return (
     <div className="min-h-screen overflow-x-hidden bg-slate-100">
-      <header className="border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex flex-wrap max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <img
-              src={logo}
-              alt="Positive Adversity Logo"
-              className="h-12 w-auto object-contain"
-            />
+    <header className="border-b border-slate-200 bg-white/90 backdrop-blur">
+  <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
 
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Positive Adversity
-              </p>
-              <h1 className="break-words text-lg font-bold text-slate-900">
-                Time, notes, and payroll tracking
-              </h1>
-            </div>
-          </div>
+    {/* LEFT SIDE */}
+    <div className="flex items-center gap-3">
+      <img
+        src={logo}
+        alt="Positive Adversity Logo"
+        className="h-12 w-auto object-contain"
+      />
 
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="hidden min-w-0 text-right sm:block">
-              <p className="truncate text-sm font-semibold text-slate-900">
-                {displayName}
-              </p>
-              <p className="truncate text-xs text-slate-500">{email}</p>
-              {role && (
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  {role}
-                </p>
-              )}
-            </div>
+      <div>
+        <p className="text-sm tracking-widest">POSITIVE ADVERSITY</p>
+        <h1 className="text-2xl font-semibold">
+          Time, notes, and payroll tracking
+        </h1>
+      </div>
+    </div>
 
-            <button
-              type="button"
-              onClick={logout}
-              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-            >
-              Log out
-            </button>
-          </div>
-        </div>
-      </header>
+    {/* RIGHT SIDE */}
+    <button className="border px-4 py-2 rounded-lg"
+     type="button"
+  onClick={logout}>
+      Log out
+    </button>
+
+  </div>
+</header>
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         <nav className="mb-6 flex flex-wrap gap-2">

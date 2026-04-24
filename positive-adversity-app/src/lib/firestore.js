@@ -328,3 +328,21 @@ export async function deleteUserProfile(uid) {
 
   await deleteDoc(doc(db, 'users', uid));
 }
+
+
+export async function updateUserDisplayName(uid, displayName) {
+  if (!uid) throw new Error("Missing user id");
+
+  const cleanName = displayName.trim();
+
+  if (!cleanName) {
+    throw new Error("Display name cannot be empty");
+  }
+
+  await updateDoc(doc(db, "users", uid), {
+    displayName: cleanName,
+    updatedAt: serverTimestamp(),
+  });
+
+  return cleanName;
+}

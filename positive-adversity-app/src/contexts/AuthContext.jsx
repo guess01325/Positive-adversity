@@ -10,6 +10,8 @@ import {
   OAuthProvider,
   signOut,
 } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../lib/firebase";
 import { Capacitor } from "@capacitor/core";
 import { GoogleSignIn } from "@capawesome/capacitor-google-sign-in";
 import { AppleSignIn, SignInScope } from "@capawesome/capacitor-apple-sign-in";
@@ -25,71 +27,61 @@ const GOOGLE_WEB_CLIENT_ID =
 
 const APPLE_SERVICE_ID = "com.positiveadversity.mobile.auth";
 
-const ALLOWED_EMAILS = [
-  "client@email.com",
-  "admin@email.com",
-  "oguess01325@yahoo.com",
-  "guess01325@gmail.com"
-];
 
 export function AuthProvider({ children }) {
+  const [userProfile, setUserProfile] = useState(null);
   const [user, setUser] = useState(null);
   const [role, setRole] = useState("user");
   const [loading, setLoading] = useState(true);
-
+  
   useEffect(() => {
     let isMounted = true;
 
-    async function applyUserState(incomingUser) {
-      try {
-        if (!incomingUser) {
-          if (!isMounted) return;
-          setUser(null);
-          setRole("user");
-          setLoading(false);
-          return;
-        }
+ async function applyUserState(incomingUser) {
+  try {
+    if (!incomingUser) {
+      if (!isMounted) return;
 
-        const normalizedUser = normalizeUser(incomingUser);
-        const userEmail = (normalizedUser.email || "").trim().toLowerCase();
-
-        if (!ALLOWED_EMAILS.includes(userEmail)) {
-          console.warn("Unauthorized email:", normalizedUser.email);
-
-          await signOut(auth);
-
-          if (!isMounted) return;
-          setUser(null);
-          setRole("user");
-          setLoading(false);
-          return;
-        }
-
-        const admin = isAdminEmail(userEmail);
-
-        if (!isMounted) return;
-        setUser(normalizedUser);
-        setRole(admin ? "admin" : "user");
-        setLoading(false);
-
-        try {
-          await upsertUserProfile(normalizedUser, admin);
-          const storedRole = await getUserRole(normalizedUser.uid);
-
-          if (!isMounted) return;
-          setRole(admin ? "admin" : storedRole || "user");
-        } catch (profileError) {
-          console.error("Profile bootstrap error:", profileError);
-        }
-      } catch (error) {
-        console.error("applyUserState error:", error);
-
-        if (!isMounted) return;
-        setUser(incomingUser ? normalizeUser(incomingUser) : null);
-        setRole("user");
-        setLoading(false);
-      }
+      setUser(null);
+      setUserProfile(null);
+      setRole("user");
+      setLoading(false);
+      return;
     }
+
+    const normalizedUser = normalizeUser(incomingUser);
+
+    if (!isMounted) return;
+
+    setUser(normalizedUser);
+
+    const docRef = doc(db, "users", normalizedUser.uid);
+    const snap = await getDoc(docRef);
+
+    if (!isMounted) return;
+
+    if (snap.exists()) {
+      const profile = snap.data();
+
+      setUserProfile(profile);
+      setRole(profile.role || "user");
+    } else {
+      setUserProfile(null);
+      setRole("user");
+    }
+
+    setLoading(false);
+  } catch (error) {
+    console.error("applyUserState error:", error);
+
+    if (!isMounted) return;
+
+    setUser(null);
+    setUserProfile(null);
+    setRole("user");
+    setLoading(false);
+  }
+}
 
     async function initProviders() {
       try {
@@ -303,6 +295,8 @@ export function AuthProvider({ children }) {
       role,
       isAdmin: role === "admin",
       loading,
+         userProfile,         
+    setUserProfile,
       signInWithGoogle,
       signInWithApple,
       signUpWithEmail,
@@ -310,10 +304,10 @@ export function AuthProvider({ children }) {
       resetPassword,
       logout,
     }),
-    [user, role, loading],
+    [user, role, loading, userProfile],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 function normalizeUser(user) {
