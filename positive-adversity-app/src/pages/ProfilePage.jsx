@@ -12,15 +12,18 @@ import { updateUserDisplayName } from "../lib/firestore";
 export default function ProfilePage() {
   const { user, role, logout, userProfile, setUserProfile } = useAuth();
   const [displayName, setDisplayName] = useState("");
+    const [saving, setSaving] = useState(false);
+    const [message, setMessage] = useState("");
 
   useEffect(() => {
     setDisplayName(
       userProfile?.displayName || user?.displayName || user?.email || "",
     );
   }, [userProfile, user]);
+  
 
   async function handleSave(e) {
-    
+
     e.preventDefault();
 
     try {
@@ -43,8 +46,6 @@ export default function ProfilePage() {
     }
   }
 
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
 
   const [confirmText, setConfirmText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);

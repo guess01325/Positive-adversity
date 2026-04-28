@@ -10,15 +10,13 @@ import {
   OAuthProvider,
   signOut,
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "../lib/firebase";
 import { Capacitor } from "@capacitor/core";
 import { GoogleSignIn } from "@capawesome/capacitor-google-sign-in";
 import { AppleSignIn, SignInScope } from "@capawesome/capacitor-apple-sign-in";
 
 import { auth } from "../lib/firebase";
 import { getUserRole, upsertUserProfile } from "../lib/firestore";
-import { isAdminEmail } from "../lib/utils";
+
 
 const AuthContext = createContext(null);
 
@@ -27,61 +25,67 @@ const GOOGLE_WEB_CLIENT_ID =
 
 const APPLE_SERVICE_ID = "com.positiveadversity.mobile.auth";
 
-
 export function AuthProvider({ children }) {
   const [userProfile, setUserProfile] = useState(null);
   const [user, setUser] = useState(null);
   const [role, setRole] = useState("user");
   const [loading, setLoading] = useState(true);
   
-  useEffect(() => {
-    let isMounted = true;
+useEffect(() => {
+  let isMounted = true;
 
- async function applyUserState(incomingUser) {
-  try {
-    if (!incomingUser) {
+  async function applyUserState(incomingUser) {
+    try {
+      if (!incomingUser) {
+        if (!isMounted) return;
+
+        setUser(null);
+        setUserProfile(null);
+        setRole("user");
+        setLoading(false);
+        return;
+      }
+
+      const normalizedUser = normalizeUser(incomingUser);
+
+      if (!isMounted) return;
+
+      setUser(normalizedUser);
+      setLoading(true);
+
+      try {
+        const profile = await upsertUserProfile(normalizedUser);
+        const storedRole = await getUserRole(normalizedUser.uid);
+
+        if (!isMounted) return;
+
+        setUserProfile(profile || null);
+        setRole(storedRole || profile?.role || "user");
+      } catch (profileError) {
+        console.error("Profile bootstrap error:", profileError);
+
+        await signOut(auth);
+
+        if (!isMounted) return;
+
+        setUser(null);
+        setUserProfile(null);
+        setRole("user");
+      } finally {
+        if (!isMounted) return;
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error("applyUserState error:", error);
+
       if (!isMounted) return;
 
       setUser(null);
       setUserProfile(null);
       setRole("user");
       setLoading(false);
-      return;
     }
-
-    const normalizedUser = normalizeUser(incomingUser);
-
-    if (!isMounted) return;
-
-    setUser(normalizedUser);
-
-    const docRef = doc(db, "users", normalizedUser.uid);
-    const snap = await getDoc(docRef);
-
-    if (!isMounted) return;
-
-    if (snap.exists()) {
-      const profile = snap.data();
-
-      setUserProfile(profile);
-      setRole(profile.role || "user");
-    } else {
-      setUserProfile(null);
-      setRole("user");
-    }
-
-    setLoading(false);
-  } catch (error) {
-    console.error("applyUserState error:", error);
-
-    if (!isMounted) return;
-
-    setUser(null);
-    setUserProfile(null);
-    setRole("user");
-    setLoading(false);
   }
-}
 
     async function initProviders() {
       try {
@@ -180,84 +184,62 @@ export function AuthProvider({ children }) {
     }
   }
 
-  async function signInWithApple() {
-    const platform = Capacitor.getPlatform();
+ async function signInWithApple() {
+  const platform = Capacitor.getPlatform();
 
-    if (platform !== "ios") {
-      throw new Error("Apple sign-in is only available on iPhone in this app.");
-    }
-
-    try {
-      const provider = new OAuthProvider("apple.com");
-      const rawNonce = generateNonce();
-      const hashedNonce = await sha256(rawNonce);
-
-      await AppleSignIn.initialize({
-        clientId: APPLE_SERVICE_ID,
-      });
-
-      const result = await AppleSignIn.signIn({
-        scopes: [SignInScope.Email, SignInScope.FullName],
-        nonce: hashedNonce,
-      });
-
-      const idToken = result?.idToken || result?.identityToken || null;
-
-      if (!idToken) {
-        throw new Error("Missing Apple ID token");
-      }
-
-      const credential = provider.credential({
-        idToken,
-        rawNonce,
-      });
-
-      const authResult = await signInWithCredential(auth, credential);
-
-      if (authResult?.user) {
-        const normalizedUser = normalizeUser(authResult.user);
-        setUser(normalizedUser);
-
-        const admin = isAdminEmail(normalizedUser.email);
-        setRole(admin ? "admin" : "user");
-
-        try {
-          await upsertUserProfile(normalizedUser, admin);
-          const storedRole = await getUserRole(normalizedUser.uid);
-          setRole(admin ? "admin" : storedRole || "user");
-        } catch (profileError) {
-          console.error(
-            "Profile bootstrap error after Apple sign-in:",
-            profileError,
-          );
-        }
-      }
-
-      return authResult.user;
-    } catch (error) {
-      console.error("APPLE SIGN-IN ERROR:", error);
-      throw error;
-    }
+  if (platform !== "ios") {
+    throw new Error("Apple sign-in is only available on iPhone in this app.");
   }
 
-  async function signUpWithEmail(email, password) {
-    const cleanEmail = email.trim().toLowerCase();
-    const result = await createUserWithEmailAndPassword(
-      auth,
-      cleanEmail,
-      password,
-    );
+  try {
+    const provider = new OAuthProvider("apple.com");
+    const rawNonce = generateNonce();
+    const hashedNonce = await sha256(rawNonce);
 
-    const admin = isAdminEmail(cleanEmail);
+    await AppleSignIn.initialize({
+      clientId: APPLE_SERVICE_ID,
+    });
 
-    try {
-      await upsertUserProfile(result.user, admin);
-    } catch (error) {
-      console.error("Sign up profile write error:", error);
+    const result = await AppleSignIn.signIn({
+      scopes: [SignInScope.Email, SignInScope.FullName],
+      nonce: hashedNonce,
+    });
+
+    const idToken = result?.idToken || result?.identityToken || null;
+
+    if (!idToken) {
+      throw new Error("Missing Apple ID token");
     }
 
-    return result.user;
+    const credential = provider.credential({
+      idToken,
+      rawNonce,
+    });
+
+    const authResult = await signInWithCredential(auth, credential);
+    return authResult.user;
+  } catch (error) {
+    console.error("APPLE SIGN-IN ERROR:", error);
+    throw error;
   }
+}
+
+async function signUpWithEmail(email, password) {
+  const cleanEmail = email.trim().toLowerCase();
+  const result = await createUserWithEmailAndPassword(
+    auth,
+    cleanEmail,
+    password,
+  );
+
+  try {
+    await upsertUserProfile(result.user);
+  } catch (error) {
+    console.error("Sign up profile write error:", error);
+  }
+
+  return result.user;
+}
 
   async function signInWithEmail(email, password) {
     const cleanEmail = email.trim().toLowerCase();

@@ -53,11 +53,6 @@ export function groupEntriesByMonth(entries) {
 }
 
 
-const ADMIN_EMAILS = ['guess01325@gmail.com'];
 
-export function isAdminEmail(email) {
-  if (!email) return false;
-  return ADMIN_EMAILS.includes(email.toLowerCase().trim());
-}
 
 
