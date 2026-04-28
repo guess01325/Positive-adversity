@@ -14,14 +14,10 @@ import { Capacitor } from "@capacitor/core";
 import { GoogleSignIn } from "@capawesome/capacitor-google-sign-in";
 import { AppleSignIn, SignInScope } from "@capawesome/capacitor-apple-sign-in";
 
-import { auth } from "../lib/firebase";
+import { auth, GOOGLE_WEB_CLIENT_ID } from "../lib/firebase";
 import { getUserRole, upsertUserProfile } from "../lib/firestore";
 
-
 const AuthContext = createContext(null);
-
-const GOOGLE_WEB_CLIENT_ID =
-  "224541354644-41o3c3730drbbagg79sinln18kbrnnnb.apps.googleusercontent.com";
 
 const APPLE_SERVICE_ID = "com.positiveadversity.mobile.auth";
 
@@ -30,62 +26,62 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [role, setRole] = useState("user");
   const [loading, setLoading] = useState(true);
-  
-useEffect(() => {
-  let isMounted = true;
 
-  async function applyUserState(incomingUser) {
-    try {
-      if (!incomingUser) {
-        if (!isMounted) return;
+  useEffect(() => {
+    let isMounted = true;
 
-        setUser(null);
-        setUserProfile(null);
-        setRole("user");
-        setLoading(false);
-        return;
-      }
-
-      const normalizedUser = normalizeUser(incomingUser);
-
-      if (!isMounted) return;
-
-      setUser(normalizedUser);
-      setLoading(true);
-
+    async function applyUserState(incomingUser) {
       try {
-        const profile = await upsertUserProfile(normalizedUser);
-        const storedRole = await getUserRole(normalizedUser.uid);
+        if (!incomingUser) {
+          if (!isMounted) return;
+
+          setUser(null);
+          setUserProfile(null);
+          setRole("user");
+          setLoading(false);
+          return;
+        }
+
+        const normalizedUser = normalizeUser(incomingUser);
 
         if (!isMounted) return;
 
-        setUserProfile(profile || null);
-        setRole(storedRole || profile?.role || "user");
-      } catch (profileError) {
-        console.error("Profile bootstrap error:", profileError);
+        setUser(normalizedUser);
+        setLoading(true);
 
-        await signOut(auth);
+        try {
+          const profile = await upsertUserProfile(normalizedUser);
+          const storedRole = await getUserRole(normalizedUser.uid);
+
+          if (!isMounted) return;
+
+          setUserProfile(profile || null);
+          setRole(storedRole || profile?.role || "user");
+        } catch (profileError) {
+          console.error("Profile bootstrap error:", profileError);
+
+          await signOut(auth);
+
+          if (!isMounted) return;
+
+          setUser(null);
+          setUserProfile(null);
+          setRole("user");
+        } finally {
+          if (!isMounted) return;
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error("applyUserState error:", error);
 
         if (!isMounted) return;
 
         setUser(null);
         setUserProfile(null);
         setRole("user");
-      } finally {
-        if (!isMounted) return;
         setLoading(false);
       }
-    } catch (error) {
-      console.error("applyUserState error:", error);
-
-      if (!isMounted) return;
-
-      setUser(null);
-      setUserProfile(null);
-      setRole("user");
-      setLoading(false);
     }
-  }
 
     async function initProviders() {
       try {
@@ -96,9 +92,12 @@ useEffect(() => {
           try {
             await GoogleSignIn.initialize({
               clientId: GOOGLE_WEB_CLIENT_ID,
+              serverClientId: GOOGLE_WEB_CLIENT_ID,
             });
           } catch (error) {
             console.error("Google Sign-In initialize error:", error);
+          } finally {
+            setLoading(false);
           }
         }
 
@@ -155,91 +154,111 @@ useEffect(() => {
       if (platform === "ios" || platform === "android") {
         const result = await GoogleSignIn.signIn();
 
+        console.log("FULL GOOGLE RESULT:", JSON.stringify(result));
+
         const idToken =
-          result?.idToken ||
-          result?.authentication?.idToken ||
-          result?.authentication?.accessToken ||
-          null;
+          result?.idToken || result?.authentication?.idToken || null;
 
         const accessToken =
           result?.accessToken || result?.authentication?.accessToken || null;
 
-        if (!idToken && !accessToken) {
-          throw new Error("Missing Google auth token.");
+        if (!idToken) {
+          throw new Error("Missing Google ID token from native sign-in.");
         }
 
-        const credential = GoogleAuthProvider.credential(idToken, accessToken);
-        const authResult = await signInWithCredential(auth, credential);
+        const credential = GoogleAuthProvider.credential(idToken);
+
+        console.log("Credential created");
+
+        const authResult = await Promise.race([
+          signInWithCredential(auth, credential),
+          new Promise((_, reject) =>
+            setTimeout(
+              () =>
+                reject(
+                  new Error("Firebase sign-in timed out after 12 seconds"),
+                ),
+              12000,
+            ),
+          ),
+        ]);
+
+        console.log("Firebase sign-in success:", authResult.user?.email);
+
         return authResult.user;
       }
 
+      // web fallback
       const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: "select_account" });
-
       const authResult = await signInWithPopup(auth, provider);
       return authResult.user;
     } catch (error) {
-      console.error("Google sign-in failed:", error);
+  console.error("Google sign-in failed full:", {
+    code: error?.code,
+    message: error?.message,
+    name: error?.name,
+    stack: error?.stack,
+  });
+  throw error;
+}
+  }
+
+  async function signInWithApple() {
+    const platform = Capacitor.getPlatform();
+
+    if (platform !== "ios") {
+      throw new Error("Apple sign-in is only available on iPhone in this app.");
+    }
+
+    try {
+      const provider = new OAuthProvider("apple.com");
+      const rawNonce = generateNonce();
+      const hashedNonce = await sha256(rawNonce);
+
+      await AppleSignIn.initialize({
+        clientId: APPLE_SERVICE_ID,
+      });
+
+      const result = await AppleSignIn.signIn({
+        scopes: [SignInScope.Email, SignInScope.FullName],
+        nonce: hashedNonce,
+      });
+
+      const idToken = result?.idToken || result?.identityToken || null;
+
+      if (!idToken) {
+        throw new Error("Missing Apple ID token");
+      }
+
+      const credential = provider.credential({
+        idToken,
+        rawNonce,
+      });
+
+      const authResult = await signInWithCredential(auth, credential);
+      return authResult.user;
+    } catch (error) {
+      console.error("APPLE SIGN-IN ERROR:", error);
       throw error;
     }
   }
 
- async function signInWithApple() {
-  const platform = Capacitor.getPlatform();
+  async function signUpWithEmail(email, password) {
+    const cleanEmail = email.trim().toLowerCase();
+    const result = await createUserWithEmailAndPassword(
+      auth,
+      cleanEmail,
+      password,
+    );
 
-  if (platform !== "ios") {
-    throw new Error("Apple sign-in is only available on iPhone in this app.");
-  }
-
-  try {
-    const provider = new OAuthProvider("apple.com");
-    const rawNonce = generateNonce();
-    const hashedNonce = await sha256(rawNonce);
-
-    await AppleSignIn.initialize({
-      clientId: APPLE_SERVICE_ID,
-    });
-
-    const result = await AppleSignIn.signIn({
-      scopes: [SignInScope.Email, SignInScope.FullName],
-      nonce: hashedNonce,
-    });
-
-    const idToken = result?.idToken || result?.identityToken || null;
-
-    if (!idToken) {
-      throw new Error("Missing Apple ID token");
+    try {
+      await upsertUserProfile(result.user);
+    } catch (error) {
+      console.error("Sign up profile write error:", error);
     }
 
-    const credential = provider.credential({
-      idToken,
-      rawNonce,
-    });
-
-    const authResult = await signInWithCredential(auth, credential);
-    return authResult.user;
-  } catch (error) {
-    console.error("APPLE SIGN-IN ERROR:", error);
-    throw error;
+    return result.user;
   }
-}
-
-async function signUpWithEmail(email, password) {
-  const cleanEmail = email.trim().toLowerCase();
-  const result = await createUserWithEmailAndPassword(
-    auth,
-    cleanEmail,
-    password,
-  );
-
-  try {
-    await upsertUserProfile(result.user);
-  } catch (error) {
-    console.error("Sign up profile write error:", error);
-  }
-
-  return result.user;
-}
 
   async function signInWithEmail(email, password) {
     const cleanEmail = email.trim().toLowerCase();
@@ -277,8 +296,8 @@ async function signUpWithEmail(email, password) {
       role,
       isAdmin: role === "admin",
       loading,
-         userProfile,         
-    setUserProfile,
+      userProfile,
+      setUserProfile,
       signInWithGoogle,
       signInWithApple,
       signUpWithEmail,
@@ -289,7 +308,7 @@ async function signUpWithEmail(email, password) {
     [user, role, loading, userProfile],
   );
 
-    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 function normalizeUser(user) {
