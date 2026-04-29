@@ -46,14 +46,22 @@ export function AuthProvider({ children }) {
 
         if (!isMounted) return;
 
-        setUser(normalizedUser);
         setLoading(true);
+
 
         try {
           const profile = await upsertUserProfile(normalizedUser);
           const storedRole = await getUserRole(normalizedUser.uid);
 
           if (!isMounted) return;
+
+          setUser({
+            ...normalizedUser,
+            displayName:
+              profile?.displayName ||
+              normalizedUser.displayName ||
+              normalizedUser.email,
+          });
 
           setUserProfile(profile || null);
           setRole(storedRole || profile?.role || "user");
@@ -193,14 +201,14 @@ export function AuthProvider({ children }) {
       const authResult = await signInWithPopup(auth, provider);
       return authResult.user;
     } catch (error) {
-  console.error("Google sign-in failed full:", {
-    code: error?.code,
-    message: error?.message,
-    name: error?.name,
-    stack: error?.stack,
-  });
-  throw error;
-}
+      console.error("Google sign-in failed full:", {
+        code: error?.code,
+        message: error?.message,
+        name: error?.name,
+        stack: error?.stack,
+      });
+      throw error;
+    }
   }
 
   async function signInWithApple() {

@@ -12,8 +12,8 @@ export default function Layout() {
   const email = user?.email || "";
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-100">
-   <header className="border-b border-slate-200 bg-white/90 backdrop-blur pt-[calc(env(safe-area-inset-top)+8px)]">
-  <div className="mx-auto flex w-full max-w-7xl items-start justify-between gap-3 px-4 py-2">
+      <header className="border-b border-slate-200 bg-white/90 backdrop-blur pt-[calc(env(safe-area-inset-top)+14px)]">
+        <div className="mx-auto flex w-full max-w-7xl items-start justify-between gap-3 px-4 py-2">
           <div className="flex min-w-0 items-start gap-3">
             <img
               src={logo}
@@ -33,9 +33,22 @@ export default function Layout() {
           </div>
 
           <button
-            className="shrink-0 rounded-lg border px-3 py-2 text-sm sm:px-4"
+            className="relative z-50 shrink-0 rounded-lg border bg-white px-3 py-2 text-sm sm:px-4"
             type="button"
-            onClick={logout}
+            onClick={async () => {
+              console.log("LOGOUT BUTTON CLICKED");
+
+              try {
+                await logout();
+                console.log("LOGOUT COMPLETE");
+              } catch (error) {
+                console.error("LOGOUT FAILED:", {
+                  code: error?.code,
+                  message: error?.message,
+                  name: error?.name,
+                });
+              }
+            }}
           >
             Log out
           </button>
@@ -65,5 +78,4 @@ export default function Layout() {
       </div>
     </div>
   );
-
 }

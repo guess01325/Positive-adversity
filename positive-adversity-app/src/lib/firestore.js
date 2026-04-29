@@ -17,42 +17,40 @@ import { db } from './firebase';
 
 export async function upsertUserProfile(user) {
   if (!user?.uid) {
-    throw new Error('Missing user uid for profile sync.');
+    throw new Error("Missing user uid for profile sync.");
   }
 
-  const userRef = doc(db, 'users', user.uid);
-  const existing = await getDoc(userRef);
+  const userRef = doc(db, "users", user.uid);
+  const snap = await getDoc(userRef);
+  const existingData = snap.exists() ? snap.data() : {};
 
-  const normalizedEmail = (user.email || '').trim().toLowerCase();
+  const normalizedEmail = (user.email || "").trim().toLowerCase();
 
-  const baseData = {
-    uid: user.uid,
-    email: normalizedEmail,
-    displayName: user.displayName || normalizedEmail,
-    photoURL: user.photoURL || '',
-    updatedAt: serverTimestamp(),
-  };
-
-  if (!existing.exists()) {
-    await setDoc(userRef, {
-      ...baseData,
-      role: 'user',
-      createdAt: serverTimestamp(),
-    });
-    return;
-  }
-
-  const existingData = existing.data();
+  const displayName =
+    existingData.displayName || user.displayName || normalizedEmail;
 
   await setDoc(
     userRef,
     {
-      ...baseData,
-      role: existingData.role || 'user',
+      uid: user.uid,
+      email: normalizedEmail,
+      displayName,
+      photoURL: existingData.photoURL || user.photoURL || "",
+      role: existingData.role || "user",
       createdAt: existingData.createdAt || serverTimestamp(),
+      updatedAt: serverTimestamp(),
     },
     { merge: true }
   );
+
+  return {
+    ...existingData,
+    uid: user.uid,
+    email: normalizedEmail,
+    displayName,
+    photoURL: existingData.photoURL || user.photoURL || "",
+    role: existingData.role || "user",
+  };
 }
 
 export async function getUserRole(uid) {

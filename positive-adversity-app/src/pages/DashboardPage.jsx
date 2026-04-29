@@ -6,7 +6,7 @@ import { createEntry, fetchEntriesByUser } from '../lib/firestore';
 import logoFull from '../assets/logo-full.png';
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -47,7 +47,7 @@ export default function DashboardPage() {
         ...payload,
         userId: user.uid,
         userEmail: user.email || '',
-        userName: user.displayName || '',
+        userName: userProfile?.displayName || user?.displayName || user?.email || '',
       };
 
       const created = await createEntry(entryToCreate);
@@ -75,7 +75,7 @@ export default function DashboardPage() {
 
           <div>
             <h2 className="text-2xl font-bold">
-              Welcome back, {user?.displayName?.split(' ')[0] || 'User'}
+              Welcome back, {(userProfile?.displayName || user?.displayName || user?.email || "User").split(' ')[0] || 'User'}
             </h2>
 
             <p className="mt-2 max-w-2xl text-sm text-slate-200">
