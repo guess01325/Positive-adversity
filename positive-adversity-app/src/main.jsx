@@ -3,10 +3,17 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter, HashRouter } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import App from './App';
+import { StatusBar, Style } from "@capacitor/status-bar";
 import { AuthProvider } from './contexts/AuthContext';
 import './index.css';
 
+
 const Router = Capacitor.isNativePlatform() ? HashRouter : BrowserRouter;
+
+if (Capacitor.isNativePlatform()) {
+  StatusBar.setOverlaysWebView({ overlay: false });
+  StatusBar.setStyle({ style: Style.Dark });
+}
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

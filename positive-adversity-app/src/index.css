@@ -1,69 +1,74 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+  @tailwind base;
+  @tailwind components;
+  @tailwind utilities;
 
-* {
-  box-sizing: border-box;
-}
+  * {
+    box-sizing: border-box;
+  }
 
-html,
-body,
-#root {
-  width: 100%;
-  max-width: 100%;
-  min-height: 100%;
-  margin: 0;
-  padding: 0;
-  overflow-x: hidden;
-}
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    min-height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+  }
 
-html {
-  overflow-x: clip;
-}
-
+  html,
 body {
-  overflow-x: hidden;
-  overscroll-behavior-x: none;
-  touch-action: pan-y;
-  @apply bg-slate-100 text-slate-900 antialiased;
+  position: relative;
 }
 
-#root {
-  overflow-x: hidden;
-}
+  html {
+    overflow-x: clip;
+  }
 
-img,
-video,
-canvas,
-svg {
-  max-width: 100%;
-  height: auto;
-}
+  body {
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    touch-action: pan-y;
+    @apply bg-slate-100 text-slate-900 antialiased;
+  }
 
-p,
-span,
-div,
-button,
-input,
-select,
-textarea,
-label {
-  overflow-wrap: break-word;
-}
+  #root {
+    overflow-x: hidden;
+  }
 
-input,
-select,
-textarea {
-  font-size: 16px;
-  @apply w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200;
-}
+  img,
+  video,
+  canvas,
+  svg {
+    max-width: 100%;
+    height: auto;
+  }
 
-label {
-  max-width: 100%;
-  @apply mb-1 block text-sm font-medium text-slate-700;
-}
+  p,
+  span,
+  div,
+  button,
+  input,
+  select,
+  textarea,
+  label {
+    overflow-wrap: break-word;
+  }
 
-button {
-  max-width: 100%;
-  @apply transition;
-}
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+    @apply w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200;
+  }
+
+  label {
+    max-width: 100%;
+    @apply mb-1 block text-sm font-medium text-slate-700;
+  }
+
+  button {
+    max-width: 100%;
+    @apply transition;
+  }

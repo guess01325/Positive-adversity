@@ -13,41 +13,31 @@ export default function Layout() {
 
 return (
 <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-100 touch-pan-y">
-  <header className="w-full max-w-full overflow-hidden bg-slate-100 pt-[env(safe-area-inset-top)] pb-3">      
-    <div className="mx-auto box-border flex w-full max-w-7xl items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur sm:px-6">    <div className="flex min-w-0 items-center gap-3 overflow-hidden">
+<header className="w-full max-w-full overflow-hidden bg-slate-100 px-4 py-3">
+  <div className="flex w-full items-start justify-between gap-3">
+    <div className="flex min-w-0 flex-1 items-center gap-3">
       <img
         src={logo}
         alt="Positive Adversity Logo"
-        className="h-10 w-auto shrink-0 object-contain sm:h-12"
+        className="h-10 w-auto shrink-0 object-contain"
       />
 
-      <div className="min-w-0 overflow-hidden">
-        <p className="truncate text-xs tracking-widest text-slate-600 sm:text-sm">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs tracking-widest text-slate-600">
           POSITIVE ADVERSITY
         </p>
 
-        <h1 className="truncate text-base font-semibold leading-tight text-slate-900 sm:text-2xl">
+        <h1 className="text-base font-semibold leading-tight text-slate-900">
           Time, notes, and payroll tracking
         </h1>
       </div>
     </div>
 
     <button
-      className="relative z-50 shrink-0 rounded-lg border bg-white px-3 py-2 text-sm sm:px-4"
+      className="shrink-0 rounded-lg border bg-white px-3 py-2 text-sm"
       type="button"
       onClick={async () => {
-        console.log("LOGOUT BUTTON CLICKED");
-
-        try {
-          await logout();
-          console.log("LOGOUT COMPLETE");
-        } catch (error) {
-          console.error("LOGOUT FAILED:", {
-            code: error?.code,
-            message: error?.message,
-            name: error?.name,
-          });
-        }
+        await logout();
       }}
     >
       Log out
