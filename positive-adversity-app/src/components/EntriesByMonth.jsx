@@ -55,8 +55,7 @@ function getInternalTotal(entry) {
 function groupEntriesByMonth(entries) {
   return entries.reduce((acc, entry) => {
     const monthKey =
-      entry.monthKey ||
-      (entry.date ? entry.date.slice(0, 7) : "Unknown Month");
+      entry.monthKey || (entry.date ? entry.date.slice(0, 7) : "Unknown Month");
 
     if (!acc[monthKey]) {
       acc[monthKey] = [];
@@ -83,6 +82,7 @@ export default function EntriesByMonth({
   showTimes = true,
   onEdit,
   onDelete,
+  onPaymentConfirmedToggle
 }) {
   const [selectedNote, setSelectedNote] = useState(null);
 
@@ -119,7 +119,7 @@ export default function EntriesByMonth({
               hours: 0,
               totalPay: 0,
               internalTotal: 0,
-            }
+            },
           );
 
           return (
@@ -131,7 +131,8 @@ export default function EntriesByMonth({
                       {month}
                     </h3>
                     <p className="text-sm text-slate-500">
-                      {monthEntries.length} entr{monthEntries.length === 1 ? "y" : "ies"}
+                      {monthEntries.length} entr
+                      {monthEntries.length === 1 ? "y" : "ies"}
                     </p>
                   </div>
 
@@ -194,7 +195,10 @@ export default function EntriesByMonth({
 
                           <p className="text-sm text-slate-600">
                             <span className="font-medium">User:</span>{" "}
-                            {entry.userName || entry.userEmail || entry.userId || "-"}
+                            {entry.userName ||
+                              entry.userEmail ||
+                              entry.userId ||
+                              "-"}
                           </p>
 
                           <p className="text-sm text-slate-600">
@@ -210,7 +214,8 @@ export default function EntriesByMonth({
                           {showTimes && (
                             <p className="text-sm text-slate-600">
                               <span className="font-medium">Time:</span>{" "}
-                              {formatTime(entry.startTime)} - {formatTime(entry.endTime)}
+                              {formatTime(entry.startTime)} -{" "}
+                              {formatTime(entry.endTime)}
                             </p>
                           )}
 
@@ -232,12 +237,16 @@ export default function EntriesByMonth({
                           {showInternalTotals && (
                             <>
                               <p className="text-sm text-slate-600">
-                                <span className="font-medium">Internal Rate:</span>{" "}
+                                <span className="font-medium">
+                                  Internal Rate:
+                                </span>{" "}
                                 {formatMoney(entry.internalRate || 0)}
                               </p>
 
                               <p className="text-sm text-slate-600">
-                                <span className="font-medium">Internal Total:</span>{" "}
+                                <span className="font-medium">
+                                  Internal Total:
+                                </span>{" "}
                                 {formatMoney(internalTotal)}
                               </p>
                             </>
@@ -264,22 +273,43 @@ export default function EntriesByMonth({
                         </div>
 
                         {showAdminActions && (
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => onEdit?.(entry)}
-                              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                            >
-                              Edit
-                            </button>
+                          <div className="flex flex-col gap-3">
+                            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={entry.paymentConfirmed === true}
+                                onChange={() =>{
+                                        console.log("checkbox clicked", entry.id);
 
-                            <button
-                              type="button"
-                              onClick={() => onDelete?.(entry.id)}
-                              className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
-                            >
-                              Delete
-                            </button>
+                                  onPaymentConfirmedToggle?.(entry)
+                                }}
+                                className="h-4 w-4"
+                              />
+
+                              <span>
+                                {entry.paymentConfirmed === true
+                                  ? "Payment Confirmed"
+                                  : "Payment Not Confirmed"}
+                              </span>
+                            </label>
+
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => onEdit?.(entry)}
+                                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                              >
+                                Edit
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => onDelete?.(entry.id)}
+                                className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -296,7 +326,9 @@ export default function EntriesByMonth({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-              <h3 className="text-lg font-semibold text-slate-900">Full Note</h3>
+              <h3 className="text-lg font-semibold text-slate-900">
+                Full Note
+              </h3>
               <button
                 type="button"
                 onClick={() => setSelectedNote(null)}

@@ -338,3 +338,4 @@ export async function updateUserDisplayName(uid, displayName) {
 
   return cleanName;
 }
+

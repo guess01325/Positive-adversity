@@ -137,7 +137,7 @@ export default function AdminPage() {
     });
 
     return Array.from(map.values()).sort((a, b) =>
-      a.label.localeCompare(b.label)
+      a.label.localeCompare(b.label),
     );
   }, [entries]);
 
@@ -154,8 +154,8 @@ export default function AdminPage() {
             }
             return "";
           })
-          .filter(Boolean)
-      )
+          .filter(Boolean),
+      ),
     );
 
     return months.sort((a, b) => b.localeCompare(a));
@@ -219,7 +219,7 @@ export default function AdminPage() {
         hours: 0,
         totalPay: 0,
         internalTotal: 0,
-      }
+      },
     );
   }, [filteredEntries]);
 
@@ -242,7 +242,7 @@ export default function AdminPage() {
         setLoadingAdjustment(true);
         const adjustment = await findDCFAdjustment(
           selectedMonth,
-          normalizedStudentSearch
+          normalizedStudentSearch,
         );
 
         if (!isCancelled) {
@@ -283,84 +283,86 @@ export default function AdminPage() {
     }
   }
 
- async function handleAddDCFAdjustment() {
-  if (!canManageDCF) {
-    alert("Select DCF, choose a specific month, and enter a student name first.");
-    return;
-  }
-
-  try {
-    setSavingAdjustment(true);
-
-    const existing = await findDCFAdjustment(
-      selectedMonth,
-      normalizedStudentSearch
-    );
-
-    if (existing) {
-      setDcfAdjustment(existing);
-      alert("DCF supervision is already applied for this student and month.");
+  async function handleAddDCFAdjustment() {
+    if (!canManageDCF) {
+      alert(
+        "Select DCF, choose a specific month, and enter a student name first.",
+      );
       return;
     }
 
-    await addDCFAdjustment({
-      monthKey: selectedMonth,
-      student: normalizedStudentSearch,
-      createdBy: user?.email || "",
-    });
+    try {
+      setSavingAdjustment(true);
 
-    const refreshed = await findDCFAdjustment(
-      selectedMonth,
-      normalizedStudentSearch
-    );
+      const existing = await findDCFAdjustment(
+        selectedMonth,
+        normalizedStudentSearch,
+      );
 
-    setDcfAdjustment(refreshed || null);
+      if (existing) {
+        setDcfAdjustment(existing);
+        alert("DCF supervision is already applied for this student and month.");
+        return;
+      }
 
-    if (refreshed) {
-      alert("DCF supervision fee applied.");
-    } else {
-      alert("DCF fee may have saved, but it did not refresh correctly.");
+      await addDCFAdjustment({
+        monthKey: selectedMonth,
+        student: normalizedStudentSearch,
+        createdBy: user?.email || "",
+      });
+
+      const refreshed = await findDCFAdjustment(
+        selectedMonth,
+        normalizedStudentSearch,
+      );
+
+      setDcfAdjustment(refreshed || null);
+
+      if (refreshed) {
+        alert("DCF supervision fee applied.");
+      } else {
+        alert("DCF fee may have saved, but it did not refresh correctly.");
+      }
+    } catch (error) {
+      console.error("Failed to add DCF adjustment:", error);
+      alert(error?.message || "Failed to add DCF supervision fee.");
+    } finally {
+      setSavingAdjustment(false);
     }
-  } catch (error) {
-    console.error("Failed to add DCF adjustment:", error);
-    alert(error?.message || "Failed to add DCF supervision fee.");
-  } finally {
-    setSavingAdjustment(false);
   }
-}
 
-async function handleRemoveDCFAdjustment() {
-  if (!dcfAdjustment?.id) return;
+  async function handleRemoveDCFAdjustment() {
+    if (!dcfAdjustment?.id) return;
 
-  const confirmed = window.confirm(
-    "Remove the DCF supervision fee for this student and month?"
-  );
-  if (!confirmed) return;
-
-  try {
-    setSavingAdjustment(true);
-
-    await deleteAdjustment(dcfAdjustment.id);
-
-    const refreshed = await findDCFAdjustment(
-      selectedMonth,
-      normalizedStudentSearch
+    const confirmed = window.confirm(
+      "Remove the DCF supervision fee for this student and month?",
     );
+    if (!confirmed) return;
 
-    setDcfAdjustment(refreshed || null);
+    try {
+      setSavingAdjustment(true);
 
-    if (!refreshed) {
-      alert("DCF supervision fee removed.");
-    } else {
-      alert("DCF fee may still exist for this selection.");
+      await deleteAdjustment(dcfAdjustment.id);
+
+      const refreshed = await findDCFAdjustment(
+        selectedMonth,
+        normalizedStudentSearch,
+      );
+
+      setDcfAdjustment(refreshed || null);
+
+      if (!refreshed) {
+        alert("DCF supervision fee removed.");
+      } else {
+        alert("DCF fee may still exist for this selection.");
+      }
+    } catch (error) {
+      console.error("Failed to remove DCF adjustment:", error);
+      alert(error?.message || "Failed to remove DCF supervision fee.");
+    } finally {
+      setSavingAdjustment(false);
     }
-  } catch (error) {
-    console.error("Failed to remove DCF adjustment:", error);
-    alert(error?.message || "Failed to remove DCF supervision fee.");
-  } finally {
-    setSavingAdjustment(false);
   }
-}
 
   function handleEdit(entry) {
     setEditingEntry(entry);
@@ -487,8 +489,8 @@ async function handleRemoveDCFAdjustment() {
                 ...entry,
                 ...updates,
               }
-            : entry
-        )
+            : entry,
+        ),
       );
 
       alert("Entry updated successfully.");
@@ -503,7 +505,7 @@ async function handleRemoveDCFAdjustment() {
 
   async function handleDelete(entryId) {
     const confirmed = window.confirm(
-      "Are you sure you want to delete this entry?"
+      "Are you sure you want to delete this entry?",
     );
     if (!confirmed) return;
 
@@ -519,6 +521,44 @@ async function handleRemoveDCFAdjustment() {
       alert(error?.message || "Failed to delete entry.");
     }
   }
+
+  const handlePaymentConfirmedToggle = async (entry) => {
+    const isCurrentlyConfirmed = entry.paymentConfirmed === true;
+    const newValue = !isCurrentlyConfirmed;
+
+    // Only confirm when turning OFF
+    if (isCurrentlyConfirmed) {
+      const confirmTurnOff = window.confirm(
+        "Are you sure you want to remove payment confirmation?",
+      );
+
+      if (!confirmTurnOff) return;
+    }
+
+
+
+
+
+  try {
+
+  await updateEntry(entry.id, {
+    paymentConfirmed: newValue,
+  });
+
+  setEntries((prevEntries) =>
+    prevEntries.map((item) =>
+      item.id === entry.id
+        ? { ...item, paymentConfirmed: newValue }
+        : item
+    )
+  );
+} catch (error) {
+  console.error("Failed to update payment confirmation:", error);
+  alert("Payment confirmation could not be updated. Please try again.");
+}
+
+
+  };
 
   if (!user) {
     return (
@@ -592,7 +632,8 @@ async function handleRemoveDCFAdjustment() {
               >
                 {SERVICE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label} (${SERVICE_RATES[option.value]?.client ?? 0}/hr)
+                    {option.label} (${SERVICE_RATES[option.value]?.client ?? 0}
+                    /hr)
                   </option>
                 ))}
               </select>
@@ -659,8 +700,8 @@ async function handleRemoveDCFAdjustment() {
                   Number(
                     SERVICE_RATES[editForm.serviceType]?.client ??
                       editingEntry?.hourlyRate ??
-                      0
-                  )
+                      0,
+                  ),
               )}
             </p>
             <p>
@@ -670,8 +711,8 @@ async function handleRemoveDCFAdjustment() {
                   Number(
                     SERVICE_RATES[editForm.serviceType]?.internal ??
                       editingEntry?.internalRate ??
-                      0
-                  )
+                      0,
+                  ),
               )}
             </p>
           </div>
@@ -746,108 +787,109 @@ async function handleRemoveDCFAdjustment() {
             ))}
           </select>
         </div>
-<div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-    <div className="flex-1">
-      <p className="text-sm font-semibold text-slate-900">
-        DCF Supervision Fee
-      </p>
-      <p className="mt-1 text-sm text-slate-600">
-        Apply one $11.25 supervision charge for the selected month and student.
-      </p>
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-slate-900">
+                DCF Supervision Fee
+              </p>
+              <p className="mt-1 text-sm text-slate-600">
+                Apply one $11.25 supervision charge for the selected month and
+                student.
+              </p>
 
-      <div className="mt-3 flex flex-wrap gap-2 text-xs">
-        <span className="rounded-full bg-white px-3 py-1 text-slate-600 ring-1 ring-slate-200">
-          Service:{" "}
-          <span className="font-medium">
-            {serviceFilter === "all" ? "Select DCF" : serviceFilter}
-          </span>
-        </span>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-white px-3 py-1 text-slate-600 ring-1 ring-slate-200">
+                  Service:{" "}
+                  <span className="font-medium">
+                    {serviceFilter === "all" ? "Select DCF" : serviceFilter}
+                  </span>
+                </span>
 
-        <span className="rounded-full bg-white px-3 py-1 text-slate-600 ring-1 ring-slate-200">
-          Month:{" "}
-          <span className="font-medium">
-            {selectedMonth === "all" ? "Select a month" : selectedMonth}
-          </span>
-        </span>
+                <span className="rounded-full bg-white px-3 py-1 text-slate-600 ring-1 ring-slate-200">
+                  Month:{" "}
+                  <span className="font-medium">
+                    {selectedMonth === "all" ? "Select a month" : selectedMonth}
+                  </span>
+                </span>
 
-        <span className="rounded-full bg-white px-3 py-1 text-slate-600 ring-1 ring-slate-200">
-          Student:{" "}
-          <span className="font-medium">
-            {normalizedStudentSearch || "Enter a student name"}
-          </span>
-        </span>
-      </div>
+                <span className="rounded-full bg-white px-3 py-1 text-slate-600 ring-1 ring-slate-200">
+                  Student:{" "}
+                  <span className="font-medium">
+                    {normalizedStudentSearch || "Enter a student name"}
+                  </span>
+                </span>
+              </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            loadingAdjustment
-              ? "bg-amber-100 text-amber-700"
-              : dcfAdjustment
-              ? "bg-green-100 text-green-700"
-              : "bg-slate-200 text-slate-700"
-          }`}
-        >
-          {loadingAdjustment
-            ? "Status: Checking..."
-            : dcfAdjustment
-            ? "Status: Active"
-            : "Status: Not Applied"}
-        </span>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    loadingAdjustment
+                      ? "bg-amber-100 text-amber-700"
+                      : dcfAdjustment
+                      ? "bg-green-100 text-green-700"
+                      : "bg-slate-200 text-slate-700"
+                  }`}
+                >
+                  {loadingAdjustment
+                    ? "Status: Checking..."
+                    : dcfAdjustment
+                    ? "Status: Active"
+                    : "Status: Not Applied"}
+                </span>
 
-        <span className="text-sm text-slate-600">
-          Fee Amount: <span className="font-medium">$11.25</span>
-        </span>
+                <span className="text-sm text-slate-600">
+                  Fee Amount: <span className="font-medium">$11.25</span>
+                </span>
 
-        {dcfAdjustment && (
-          <span className="text-sm font-medium text-green-700">
-            Applied
-          </span>
-        )}
-      </div>
+                {dcfAdjustment && (
+                  <span className="text-sm font-medium text-green-700">
+                    Applied
+                  </span>
+                )}
+              </div>
 
-      {dcfAdjustment && (
-        <div className="mt-3 rounded-lg bg-white px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">
-          <span className="font-medium">Matched Record:</span>{" "}
-          {dcfAdjustment.student} • {dcfAdjustment.monthKey} •{" "}
-          {dcfAdjustment.serviceType || "DCF"}
+              {dcfAdjustment && (
+                <div className="mt-3 rounded-lg bg-white px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">
+                  <span className="font-medium">Matched Record:</span>{" "}
+                  {dcfAdjustment.student} • {dcfAdjustment.monthKey} •{" "}
+                  {dcfAdjustment.serviceType || "DCF"}
+                </div>
+              )}
+
+              {!canManageDCF && (
+                <p className="mt-3 text-sm text-amber-700">
+                  Choose <span className="font-medium">DCF</span>, select a
+                  specific month, and enter a student name to manage this fee.
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleAddDCFAdjustment}
+                disabled={!canManageDCF || !!dcfAdjustment || savingAdjustment}
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {savingAdjustment && !dcfAdjustment
+                  ? "Applying..."
+                  : "Apply DCF Supervision ($11.25)"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRemoveDCFAdjustment}
+                disabled={!dcfAdjustment || savingAdjustment}
+                className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {savingAdjustment && dcfAdjustment
+                  ? "Removing..."
+                  : "Remove DCF Supervision"}
+              </button>
+            </div>
+          </div>
         </div>
-      )}
-
-      {!canManageDCF && (
-        <p className="mt-3 text-sm text-amber-700">
-          Choose <span className="font-medium">DCF</span>, select a specific
-          month, and enter a student name to manage this fee.
-        </p>
-      )}
-    </div>
-
-    <div className="flex flex-wrap gap-2">
-      <button
-        type="button"
-        onClick={handleAddDCFAdjustment}
-        disabled={!canManageDCF || !!dcfAdjustment || savingAdjustment}
-        className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {savingAdjustment && !dcfAdjustment
-          ? "Applying..."
-          : "Apply DCF Supervision ($11.25)"}
-      </button>
-
-      <button
-        type="button"
-        onClick={handleRemoveDCFAdjustment}
-        disabled={!dcfAdjustment || savingAdjustment}
-        className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {savingAdjustment && dcfAdjustment
-          ? "Removing..."
-          : "Remove DCF Supervision"}
-      </button>
-    </div>
-  </div>
-</div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-4">
           <div className="rounded-xl bg-slate-50 p-4">
@@ -913,6 +955,7 @@ async function handleRemoveDCFAdjustment() {
           showTimes={true}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onPaymentConfirmedToggle={handlePaymentConfirmedToggle}
         />
       )}
     </div>
