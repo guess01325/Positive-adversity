@@ -18,8 +18,6 @@ const firebaseConfig = {
 
 export const GOOGLE_WEB_CLIENT_ID = import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID;
 
-console.log("AUTH DOMAIN:", import.meta.env.VITE_FIREBASE_AUTH_DOMAIN);
-
 const app = initializeApp(firebaseConfig);
 
 let auth;

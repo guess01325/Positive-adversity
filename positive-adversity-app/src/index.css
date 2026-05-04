@@ -2,6 +2,10 @@
   @tailwind components;
   @tailwind utilities;
 
+  .safe-top {
+  padding-top: max(env(safe-area-inset-top), 32px);
+}
+
   * {
     box-sizing: border-box;
   }

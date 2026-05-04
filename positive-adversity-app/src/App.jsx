@@ -1,3 +1,4 @@
+import {useEffect} from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
 import AdminRoute from './components/AdminRoute';
@@ -7,14 +8,20 @@ import AdminPage from './pages/AdminPage';
 import ProfilePage from './pages/ProfilePage';
 import NotFoundPage from './pages/NotFoundPage';
 import { useAuth } from './contexts/AuthContext';
+import { StatusBar, Style } from '@capacitor/status-bar';
+
 
 export default function App() {
   const { user, loading } = useAuth();
 
-  console.log('App render:', {
-    loading,
-    user: user?.email || null,
-  });
+
+    useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      StatusBar.setOverlaysWebView({ overlay: false });
+      StatusBar.setBackgroundColor({ color: "#0f172a" });
+      StatusBar.setStyle({ style: Style.Dark });
+    }
+  }, []);
 
   if (loading) {
     return (

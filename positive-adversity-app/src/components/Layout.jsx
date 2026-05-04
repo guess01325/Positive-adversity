@@ -12,8 +12,13 @@ export default function Layout() {
   const email = user?.email || "";
 
 return (
-<div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-100 touch-pan-y">
-<header className="w-full max-w-full overflow-hidden bg-slate-100 px-4 py-3">
+<div
+  className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-100 touch-pan-y flex flex-col"
+  style={{
+    paddingTop: "max(env(safe-area-inset-top), 40px)",
+  }}
+>
+  <header className="w-full max-w-full overflow-hidden bg-slate-100 px-4 py-3">
   <div className="flex w-full items-start justify-between gap-3">
     <div className="flex min-w-0 flex-1 items-center gap-3">
       <img
