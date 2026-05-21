@@ -535,29 +535,20 @@ export default function AdminPage() {
       if (!confirmTurnOff) return;
     }
 
+    try {
+      await updateEntry(entry.id, {
+        paymentConfirmed: newValue,
+      });
 
-
-
-
-  try {
-
-  await updateEntry(entry.id, {
-    paymentConfirmed: newValue,
-  });
-
-  setEntries((prevEntries) =>
-    prevEntries.map((item) =>
-      item.id === entry.id
-        ? { ...item, paymentConfirmed: newValue }
-        : item
-    )
-  );
-} catch (error) {
-  console.error("Failed to update payment confirmation:", error);
-  alert("Payment confirmation could not be updated. Please try again.");
-}
-
-
+      setEntries((prevEntries) =>
+        prevEntries.map((item) =>
+          item.id === entry.id ? { ...item, paymentConfirmed: newValue } : item,
+        ),
+      );
+    } catch (error) {
+      console.error("Failed to update payment confirmation:", error);
+      alert("Payment confirmation could not be updated. Please try again.");
+    }
   };
 
   if (!user) {

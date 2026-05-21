@@ -50,7 +50,7 @@ You can include multiple emails separated by commas.
 ### `entries`
 ```json
 {
-  "uid": "abc123",
+  "userId": "abc123",
   "userEmail": "allan@example.com",
   "userName": "Allan Chaney",
   "serviceType": "DCF",
@@ -65,6 +65,32 @@ You can include multiple emails separated by commas.
 }
 ```
 
+### `orders`
+```json
+{
+  "customer": {
+    "fullName": "Otis Owens",
+    "email": "owens@example.com",
+    "phone": "800-303-0127"
+  },
+  "shippingAddress": {
+    "streetAddress": "303 Main St",
+    "apartment": "303",
+    "city": "Worcester",
+    "state": "MA",
+    "zip": "01604"
+  },
+  "payment": {
+    "option": "paypal",
+    "referenceId": "ABC123"
+  },
+  "items": [],
+  "total": 115,
+  "status": "pending",
+  "paymentConfirmed": false
+}
+```
+
 ## Suggested Firestore rules
 
 ```txt
@@ -76,13 +102,25 @@ service cloud.firestore {
     }
 
     match /entries/{entryId} {
-      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
       allow read: if request.auth != null && (
-        resource.data.uid == request.auth.uid ||
+        resource.data.userId == request.auth.uid ||
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
       );
-      allow update, delete: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    match /orders/{orderId} {
+      allow create: if request.resource.data.customer.email is string
+        && request.resource.data.customer.fullName is string
+        && request.resource.data.items is list
+        && request.resource.data.total is number
+        && request.resource.data.status == 'pending'
+        && request.resource.data.paymentConfirmed == false;
+      allow read, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
   }
 }

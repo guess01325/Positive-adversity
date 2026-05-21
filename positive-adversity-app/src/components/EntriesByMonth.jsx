@@ -278,10 +278,8 @@ export default function EntriesByMonth({
                               <input
                                 type="checkbox"
                                 checked={entry.paymentConfirmed === true}
-                                onChange={() =>{
-                                        console.log("checkbox clicked", entry.id);
-
-                                  onPaymentConfirmedToggle?.(entry)
+                                onChange={() => {
+                                  onPaymentConfirmedToggle?.(entry);
                                 }}
                                 className="h-4 w-4"
                               />

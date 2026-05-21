@@ -51,7 +51,7 @@ export function AuthProvider({ children }) {
 
         try {
           const profile = await upsertUserProfile(normalizedUser);
-          const storedRole = await getUserRole(normalizedUser.uid);
+          const storedRole = await getUserRole(normalizedUser);
 
           if (!isMounted) return;
 
@@ -162,21 +162,14 @@ export function AuthProvider({ children }) {
       if (platform === "ios" || platform === "android") {
         const result = await GoogleSignIn.signIn();
 
-        console.log("FULL GOOGLE RESULT:", JSON.stringify(result));
-
         const idToken =
           result?.idToken || result?.authentication?.idToken || null;
-
-        const accessToken =
-          result?.accessToken || result?.authentication?.accessToken || null;
 
         if (!idToken) {
           throw new Error("Missing Google ID token from native sign-in.");
         }
 
         const credential = GoogleAuthProvider.credential(idToken);
-
-        console.log("Credential created");
 
         const authResult = await Promise.race([
           signInWithCredential(auth, credential),
@@ -190,8 +183,6 @@ export function AuthProvider({ children }) {
             ),
           ),
         ]);
-
-        console.log("Firebase sign-in success:", authResult.user?.email);
 
         return authResult.user;
       }

@@ -14,6 +14,35 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 
+export const PROTECTED_ADMIN_EMAIL = 'guess01325@gmail.com';
+
+function normalizeEmail(email) {
+  return (email || '').trim().toLowerCase();
+}
+
+function isProtectedAdminEmail(email) {
+  return normalizeEmail(email) === PROTECTED_ADMIN_EMAIL;
+}
+
+async function updateUserRolesByEmail(email, role) {
+  const cleanEmail = normalizeEmail(email);
+  if (!cleanEmail) return;
+
+  const usersQuery = query(collection(db, 'users'), where('email', '==', cleanEmail));
+  const snapshot = await getDocs(usersQuery);
+
+  if (snapshot.empty) return;
+
+  const batch = writeBatch(db);
+  snapshot.docs.forEach((userDoc) => {
+    batch.update(userDoc.ref, {
+      role,
+      updatedAt: serverTimestamp(),
+    });
+  });
+
+  await batch.commit();
+}
 
 export async function upsertUserProfile(user) {
   if (!user?.uid) {
@@ -24,7 +53,23 @@ export async function upsertUserProfile(user) {
   const snap = await getDoc(userRef);
   const existingData = snap.exists() ? snap.data() : {};
 
-  const normalizedEmail = (user.email || "").trim().toLowerCase();
+  const normalizedEmail = normalizeEmail(user.email);
+  const protectedAdmin = isProtectedAdminEmail(normalizedEmail);
+  const allowedUserSnap = await getDoc(doc(db, 'allowedUsers', normalizedEmail));
+  const allowedUserData = allowedUserSnap.exists() ? allowedUserSnap.data() : null;
+
+  if (!protectedAdmin && allowedUserData?.active === false) {
+    throw new Error('This account is not active. Please contact an admin.');
+  }
+
+  const shouldUseAllowedAdmin = typeof allowedUserData?.admin === 'boolean';
+  const role = protectedAdmin
+    ? 'admin'
+    : shouldUseAllowedAdmin
+      ? allowedUserData.admin
+        ? 'admin'
+        : 'user'
+      : existingData.role || 'user';
 
   const displayName =
     existingData.displayName || user.displayName || normalizedEmail;
@@ -36,7 +81,7 @@ export async function upsertUserProfile(user) {
       email: normalizedEmail,
       displayName,
       photoURL: existingData.photoURL || user.photoURL || "",
-      role: existingData.role || "user",
+      role,
       createdAt: existingData.createdAt || serverTimestamp(),
       updatedAt: serverTimestamp(),
     },
@@ -49,11 +94,28 @@ export async function upsertUserProfile(user) {
     email: normalizedEmail,
     displayName,
     photoURL: existingData.photoURL || user.photoURL || "",
-    role: existingData.role || "user",
+    role,
   };
 }
 
-export async function getUserRole(uid) {
+export async function getUserRole(userOrUid) {
+  const email = normalizeEmail(
+    typeof userOrUid === 'string' ? '' : userOrUid?.email
+  );
+
+  if (isProtectedAdminEmail(email)) return 'admin';
+
+  if (email) {
+    const allowedUserSnap = await getDoc(doc(db, 'allowedUsers', email));
+    const allowedUserData = allowedUserSnap.exists()
+      ? allowedUserSnap.data()
+      : null;
+
+    if (allowedUserData?.active === false) return 'user';
+    if (allowedUserData?.admin === true) return 'admin';
+  }
+
+  const uid = typeof userOrUid === 'string' ? userOrUid : userOrUid?.uid;
   if (!uid) return 'user';
 
   const snap = await getDoc(doc(db, 'users', uid));
@@ -62,6 +124,230 @@ export async function getUserRole(uid) {
   const data = snap.data();
   if (data?.isAdmin === true) return 'admin';
   return data?.role || 'user';
+}
+
+export async function fetchAllowedUsers() {
+  const [allowedUsersSnapshot, usersSnapshot] = await Promise.all([
+    getDocs(collection(db, 'allowedUsers')),
+    getDocs(collection(db, 'users')),
+  ]);
+
+  const userRoleByEmail = new Map();
+
+  usersSnapshot.docs.forEach((userDoc) => {
+    const userData = userDoc.data();
+    const email = normalizeEmail(userData.email);
+    if (!email) return;
+
+    userRoleByEmail.set(email, userData.isAdmin === true || userData.role === 'admin');
+  });
+
+  const users = allowedUsersSnapshot.docs.map((doc) => {
+    const data = doc.data();
+    const email = normalizeEmail(doc.id);
+    const protectedAdmin = isProtectedAdminEmail(email);
+
+    return {
+      email,
+      active: protectedAdmin ? true : Boolean(data?.active),
+      admin:
+        protectedAdmin ||
+        (typeof data?.admin === 'boolean'
+          ? data.admin
+          : Boolean(userRoleByEmail.get(email))),
+      protectedAdmin,
+    };
+  });
+
+  if (!users.some((user) => user.email === PROTECTED_ADMIN_EMAIL)) {
+    users.push({
+      email: PROTECTED_ADMIN_EMAIL,
+      active: true,
+      admin: true,
+      protectedAdmin: true,
+    });
+  }
+
+  return users.sort((a, b) => {
+    if (a.admin !== b.admin) return a.admin ? -1 : 1;
+    if (a.active !== b.active) return a.active ? -1 : 1;
+    return a.email.localeCompare(b.email);
+  });
+}
+
+export async function upsertAllowedUser(email, active = true, admin = false) {
+  const cleanEmail = normalizeEmail(email);
+
+  if (!cleanEmail) {
+    throw new Error('Email is required.');
+  }
+
+  if (isProtectedAdminEmail(cleanEmail)) {
+    throw new Error('The protected developer admin cannot be changed here.');
+  }
+
+  await setDoc(doc(db, 'allowedUsers', cleanEmail), {
+    active: Boolean(active),
+    admin: Boolean(admin),
+  });
+
+  await updateUserRolesByEmail(cleanEmail, admin ? 'admin' : 'user');
+}
+
+export async function updateAllowedUser(originalEmail, updates) {
+  const cleanOriginalEmail = normalizeEmail(originalEmail);
+  const cleanNextEmail = normalizeEmail(updates.email);
+
+  if (!cleanOriginalEmail || !cleanNextEmail) {
+    throw new Error('Email is required.');
+  }
+
+  if (
+    isProtectedAdminEmail(cleanOriginalEmail) ||
+    isProtectedAdminEmail(cleanNextEmail)
+  ) {
+    throw new Error('The protected developer admin cannot be changed here.');
+  }
+
+  const payload = {
+    active: Boolean(updates.active),
+    admin: Boolean(updates.admin),
+  };
+
+  if (cleanOriginalEmail === cleanNextEmail) {
+    await setDoc(doc(db, 'allowedUsers', cleanOriginalEmail), payload);
+    await updateUserRolesByEmail(cleanNextEmail, payload.admin ? 'admin' : 'user');
+    return;
+  }
+
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'allowedUsers', cleanNextEmail), payload);
+  batch.delete(doc(db, 'allowedUsers', cleanOriginalEmail));
+  await batch.commit();
+  await updateUserRolesByEmail(cleanOriginalEmail, 'user');
+  await updateUserRolesByEmail(cleanNextEmail, payload.admin ? 'admin' : 'user');
+}
+
+export async function deleteAllowedUser(email) {
+  const cleanEmail = normalizeEmail(email);
+
+  if (!cleanEmail) {
+    throw new Error('Email is required.');
+  }
+
+  if (isProtectedAdminEmail(cleanEmail)) {
+    throw new Error('The protected developer admin cannot be deleted.');
+  }
+
+  await deleteDoc(doc(db, 'allowedUsers', cleanEmail));
+  await updateUserRolesByEmail(cleanEmail, 'user');
+}
+
+export async function fetchEvents({ includeInactive = false } = {}) {
+  const eventsRef = collection(db, 'events');
+  const snapshot = await getDocs(
+    includeInactive ? eventsRef : query(eventsRef, where('active', '==', true))
+  );
+
+  const events = snapshot.docs.map((eventDoc) => ({
+    id: eventDoc.id,
+    ...eventDoc.data(),
+  }));
+
+  return events
+    .sort((a, b) => {
+      const createdA =
+        a.createdAt?.seconds != null
+          ? a.createdAt.seconds * 1000 +
+            Math.floor((a.createdAt.nanoseconds || 0) / 1e6)
+          : 0;
+
+      const createdB =
+        b.createdAt?.seconds != null
+          ? b.createdAt.seconds * 1000 +
+            Math.floor((b.createdAt.nanoseconds || 0) / 1e6)
+          : 0;
+
+      return createdB - createdA;
+    });
+}
+
+export async function createEvent(eventData) {
+  const docRef = await addDoc(collection(db, 'events'), {
+    ...eventData,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return docRef.id;
+}
+
+export async function updateEvent(eventId, updates) {
+  if (!eventId) {
+    throw new Error('Missing event id for update.');
+  }
+
+  await updateDoc(doc(db, 'events', eventId), {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteEvent(eventId) {
+  if (!eventId) {
+    throw new Error('Missing event id for delete.');
+  }
+
+  await deleteDoc(doc(db, 'events', eventId));
+}
+
+export async function fetchProducts({ includeInactive = false } = {}) {
+  const productsRef = collection(db, 'products');
+  const snapshot = await getDocs(
+    includeInactive ? productsRef : query(productsRef, where('inStock', '==', true))
+  );
+
+  const products = snapshot.docs.map((productDoc) => ({
+    id: productDoc.id,
+    ...productDoc.data(),
+  }));
+
+  return products.sort((a, b) => {
+    if (Boolean(a.featured) !== Boolean(b.featured)) {
+      return a.featured ? -1 : 1;
+    }
+
+    return (a.name || '').localeCompare(b.name || '');
+  });
+}
+
+export async function createProduct(productData) {
+  const docRef = await addDoc(collection(db, 'products'), {
+    ...productData,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return docRef.id;
+}
+
+export async function updateProduct(productId, updates) {
+  if (!productId) {
+    throw new Error('Missing product id for update.');
+  }
+
+  await updateDoc(doc(db, 'products', productId), {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteProduct(productId) {
+  if (!productId) {
+    throw new Error('Missing product id for delete.');
+  }
+
+  await deleteDoc(doc(db, 'products', productId));
 }
 
 export async function createEntry(entry) {
@@ -339,3 +625,59 @@ export async function updateUserDisplayName(uid, displayName) {
   return cleanName;
 }
 
+export async function createOrder(orderData) {
+  const docRef = await addDoc(collection(db, "orders"), {
+    ...orderData,
+    status: "pending",
+    paymentConfirmed: false,
+    createdAt: serverTimestamp(),
+  });
+
+  return docRef.id;
+}
+
+export async function fetchOrders() {
+  const snapshot = await getDocs(collection(db, "orders"));
+
+  const results = snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+
+  results.sort((a, b) => {
+    const createdA =
+      a.createdAt?.seconds != null
+        ? a.createdAt.seconds * 1000 +
+          Math.floor((a.createdAt.nanoseconds || 0) / 1e6)
+        : 0;
+
+    const createdB =
+      b.createdAt?.seconds != null
+        ? b.createdAt.seconds * 1000 +
+          Math.floor((b.createdAt.nanoseconds || 0) / 1e6)
+        : 0;
+
+    return createdB - createdA;
+  });
+
+  return results;
+}
+
+export async function updateOrder(orderId, updates) {
+  if (!orderId) {
+    throw new Error("Missing order id for update.");
+  }
+
+  await updateDoc(doc(db, "orders", orderId), {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteOrder(orderId) {
+  if (!orderId) {
+    throw new Error("Missing order id for delete.");
+  }
+
+  await deleteDoc(doc(db, "orders", orderId));
+}
