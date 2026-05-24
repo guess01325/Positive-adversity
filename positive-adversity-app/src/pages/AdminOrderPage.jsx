@@ -59,6 +59,7 @@ function toEditForm(order) {
     paymentConfirmed: Boolean(order.paymentConfirmed),
     items: (order.items || []).map((item) => ({
       name: item.name || "",
+      size: item.size || "",
       quantity: Number(item.quantity || 1),
       price: Number(item.price || 0),
     })),
@@ -75,6 +76,7 @@ export default function AdminOrderPage() {
   const [editingOrderId, setEditingOrderId] = useState("");
   const [editForm, setEditForm] = useState(initialEditForm);
   const [selectedProductIndex, setSelectedProductIndex] = useState("0");
+  const [selectedCatalogSize, setSelectedCatalogSize] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingOrderId, setDeletingOrderId] = useState("");
 
@@ -182,15 +184,32 @@ export default function AdminOrderPage() {
     }));
   }
 
+  function getProductSizes(product) {
+    return Array.isArray(product?.sizes) ? product.sizes.filter(Boolean) : [];
+  }
+
+  function handleSelectedProductChange(value) {
+    const product = products[Number(value)];
+    const sizes = getProductSizes(product);
+
+    setSelectedProductIndex(value);
+    setSelectedCatalogSize(sizes[0] || "");
+  }
+
   function handleAddCatalogItem() {
     const product = products[Number(selectedProductIndex)];
     if (!product) return;
 
+    const sizes = getProductSizes(product);
+    const size = selectedCatalogSize || sizes[0] || "";
+
     setEditForm((currentForm) => ({
       ...currentForm,
-      items: currentForm.items.some((item) => item.name === product.name)
+      items: currentForm.items.some(
+        (item) => item.name === product.name && (item.size || "") === size,
+      )
         ? currentForm.items.map((item) =>
-            item.name === product.name
+            item.name === product.name && (item.size || "") === size
               ? {
                   ...item,
                   quantity: Number(item.quantity || 0) + 1,
@@ -202,6 +221,7 @@ export default function AdminOrderPage() {
             ...currentForm.items,
             {
               name: product.name,
+              size,
               quantity: 1,
               price: product.price,
             },
@@ -243,6 +263,7 @@ export default function AdminOrderPage() {
       const cleanedItems = editForm.items
         .map((item) => ({
           name: item.name.trim(),
+          size: (item.size || "").trim(),
           quantity: Number(item.quantity || 0),
           price: Number(item.price || 0),
         }))
@@ -553,7 +574,7 @@ export default function AdminOrderPage() {
                   <select
                     value={selectedProductIndex}
                     onChange={(event) =>
-                      setSelectedProductIndex(event.target.value)
+                      handleSelectedProductChange(event.target.value)
                     }
                     className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
                   >
@@ -563,6 +584,28 @@ export default function AdminOrderPage() {
                       </option>
                     ))}
                   </select>
+
+                  {getProductSizes(products[Number(selectedProductIndex)])
+                    .length > 0 ? (
+                    <select
+                      value={
+                        selectedCatalogSize ||
+                        getProductSizes(products[Number(selectedProductIndex)])[0]
+                      }
+                      onChange={(event) =>
+                        setSelectedCatalogSize(event.target.value)
+                      }
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+                    >
+                      {getProductSizes(
+                        products[Number(selectedProductIndex)],
+                      ).map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
 
                   <button
                     type="button"
@@ -577,8 +620,8 @@ export default function AdminOrderPage() {
               <div className="mt-4 space-y-3">
                 {editForm.items.map((item, index) => (
                   <div
-                    key={`${item.name}-${index}`}
-                    className="grid gap-3 rounded-xl bg-white p-3 md:grid-cols-[1fr_150px_140px_120px_auto]"
+                    key={`${item.name}-${item.size || "no-size"}-${index}`}
+                    className="grid gap-3 rounded-xl bg-white p-3 md:grid-cols-[1fr_120px_130px_130px_120px_auto]"
                   >
                     <label className="text-sm font-semibold text-slate-700">
                       Item Name
@@ -589,6 +632,19 @@ export default function AdminOrderPage() {
                           handleItemChange(index, "name", event.target.value)
                         }
                         required
+                        className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-normal"
+                      />
+                    </label>
+
+                    <label className="text-sm font-semibold text-slate-700">
+                      Size
+                      <input
+                        type="text"
+                        value={item.size || ""}
+                        onChange={(event) =>
+                          handleItemChange(index, "size", event.target.value)
+                        }
+                        placeholder="Optional"
                         className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-normal"
                       />
                     </label>
@@ -744,12 +800,19 @@ export default function AdminOrderPage() {
                 <div className="rounded-xl bg-slate-50 p-4">
                   <p className="text-sm font-bold text-slate-900">Items</p>
                   <div className="mt-2 space-y-1">
-                    {(order.items || []).map((item) => (
+                    {(order.items || []).map((item, index) => (
                       <div
-                        key={item.name}
-                        className="flex items-center justify-between gap-3 text-sm text-slate-600"
+                        key={`${item.name}-${item.size || "no-size"}-${index}`}
+                        className="flex items-start justify-between gap-3 text-sm text-slate-600"
                       >
-                        <span>{item.name}</span>
+                        <span>
+                          {item.name}
+                          {item.size ? (
+                            <span className="block text-xs font-bold uppercase tracking-wide text-slate-500">
+                              Size: {item.size}
+                            </span>
+                          ) : null}
+                        </span>
                         <span>
                           {item.quantity} x {formatCurrency(item.price)}
                         </span>

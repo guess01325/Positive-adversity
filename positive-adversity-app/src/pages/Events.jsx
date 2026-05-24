@@ -67,13 +67,13 @@ export default function Events() {
   }, []);
 
   return (
-    <section className="space-y-6">
-      <div className="rounded-2xl bg-slate-900 p-6 text-white shadow-sm">
-        <p className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+    <section className="space-y-6 pb-6">
+      <div className="rounded-[1.5rem] bg-slate-950 p-6 text-white shadow-xl shadow-black/20 sm:p-8">
+        <p className="text-sm font-black uppercase tracking-[0.24em] text-[#f6b332]">
           Positive Adversity
         </p>
-        <h1 className="mt-2 text-3xl font-bold">Events</h1>
-        <p className="mt-2 text-sm text-slate-300">
+        <h1 className="mt-3 text-4xl font-black">Events</h1>
+        <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-300">
           Community events, outreach, and upcoming opportunities.
         </p>
       </div>
@@ -100,17 +100,17 @@ export default function Events() {
             return (
               <article
                 key={eventKey}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-xl shadow-black/10"
               >
                 <EventMedia event={event} />
 
                 <div className="mt-6 text-center">
-                  <p className="text-sm font-extrabold uppercase tracking-wide text-slate-900">
+                  <p className="text-sm font-black uppercase tracking-[0.18em] text-[#b97809]">
                     {event.title}
                   </p>
 
                   {event.description ? (
-                    <p className="mt-3 text-sm font-semibold text-slate-700">
+                    <p className="mt-3 text-sm font-bold text-slate-700">
                       {event.description}
                     </p>
                   ) : null}
@@ -128,12 +128,12 @@ export default function Events() {
                   ) : null}
 
                   {event.details ? (
-                    <div className="mx-auto mt-6 max-w-xl rounded-xl bg-slate-50 p-4">
-                      <p className="text-sm font-extrabold text-slate-900">
+                    <div className="mx-auto mt-6 max-w-xl rounded-2xl bg-slate-100 p-4">
+                      <p className="text-sm font-black text-slate-900">
                         Details
                       </p>
                       <p
-                        className={`mt-3 text-sm font-semibold text-slate-700 ${
+                        className={`mt-3 text-sm font-semibold leading-6 text-slate-700 ${
                           shouldCollapseDetails && !isExpanded
                             ? "line-clamp-3"
                             : ""
@@ -151,7 +151,7 @@ export default function Events() {
                               [eventKey]: !isExpanded,
                             }))
                           }
-                          className="mt-3 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                          className="mt-3 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50"
                         >
                           {isExpanded ? "Show Less" : "Read More"}
                         </button>
