@@ -30,7 +30,7 @@ export default function MainPageLayout() {
                 Positive Adversity
               </p>
               <p className="truncate text-sm font-semibold text-slate-300">
-                Youth services, events, and community gear
+                Youth Services, Events, and Team Gear
               </p>
             </div>
           </div>
@@ -41,7 +41,7 @@ export default function MainPageLayout() {
             </NavLink>
 
             <NavLink to="/store" end className={linkClasses}>
-              Store
+              Team Gear
             </NavLink>
 
             <NavLink to="/events" className={linkClasses}>

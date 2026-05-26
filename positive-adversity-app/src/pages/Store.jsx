@@ -1,8 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import logo from "../assets/logo.png";
-import { DONATE_URL } from "../lib/constants";
+import acGoldLogo from "../assets/ac-gold-logo.png";
+import logoFull from "../assets/logo-full.png";
+import { DONATE_URL, TEAM_DONATE_URL } from "../lib/constants";
 import { createOrder, fetchProducts } from "../lib/firestore";
 import { storeProducts } from "../lib/products";
+
+const shopTiles = [
+  {
+    label: "AC Gear",
+    collection: "AC Gear",
+    categories: ["Accessories/Merch"],
+  },
+  {
+    label: "AC Elite Apparel",
+    collection: "AC Elite Apparel",
+    excludeCategories: ["Accessories/Merch"],
+  },
+];
 
 const initialCheckoutForm = {
   fullName: "",
@@ -20,6 +34,7 @@ const initialCheckoutForm = {
 export default function Store() {
   const [products, setProducts] = useState(storeProducts);
   const [activeCategory, setActiveCategory] = useState("All");
+  const [activeCollection, setActiveCollection] = useState("All");
   const [selectedSizes, setSelectedSizes] = useState({});
   const [cartItems, setCartItems] = useState([]);
   const [checkoutForm, setCheckoutForm] = useState(initialCheckoutForm);
@@ -55,11 +70,32 @@ export default function Store() {
   );
 
   const filteredProducts = useMemo(
-    () =>
-      activeCategory === "All"
-        ? products
-        : products.filter((product) => product.category === activeCategory),
-    [activeCategory, products],
+    () => {
+      const categoryProducts =
+        activeCategory === "All"
+          ? products
+          : products.filter((product) => product.category === activeCategory);
+      const activeTile = shopTiles.find(
+        (tile) => tile.collection === activeCollection,
+      );
+
+      if (!activeTile) {
+        return categoryProducts;
+      }
+
+      return categoryProducts.filter((product) => {
+        if (Array.isArray(activeTile.categories)) {
+          return activeTile.categories.includes(product.category);
+        }
+
+        if (Array.isArray(activeTile.excludeCategories)) {
+          return !activeTile.excludeCategories.includes(product.category);
+        }
+
+        return true;
+      });
+    },
+    [activeCategory, activeCollection, products],
   );
 
   const featuredProduct =
@@ -135,6 +171,11 @@ export default function Store() {
     });
   }
 
+  function handleShopTileClick(collection) {
+    setActiveCollection(collection);
+    setActiveCategory("All");
+  }
+
   function handleUpdateQuantity(itemName, itemSize, change) {
     setCartItems((currentItems) =>
       currentItems
@@ -203,26 +244,49 @@ export default function Store() {
 
   return (
     <main className="space-y-8 pb-10">
-      <section className="grid overflow-hidden rounded-[2rem] border border-white/10 bg-[#111111] shadow-2xl shadow-black/40 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="flex min-h-[420px] flex-col justify-between p-6 sm:p-8 lg:p-10">
+      <section className="relative grid overflow-hidden rounded-[2rem] border border-white/10 bg-[#0a0f17] shadow-2xl shadow-black/40 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(0deg,rgba(0,168,255,0.06)_1px,transparent_1px)] bg-[size:78px_78px]" />
+        <div className="relative flex min-h-[460px] flex-col justify-between p-6 sm:p-8 lg:p-10">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.28em] text-[#f6b332]">
-              Positive Adversity Store
+            <p className="text-sm font-black uppercase tracking-[0.28em] text-[#1ed760]">
+              AC Elite Team Store
             </p>
             <h1 className="mt-5 max-w-3xl text-5xl font-black leading-none text-white sm:text-6xl">
-              Gear that carries the mission.
+              AC Elite gear for the squad.
             </h1>
             <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-slate-300">
-              Shop apparel and merchandise built around Positive Adversity's
-              community work. Every order helps keep the brand visible and the
-              mission moving.
+              Shop AC Gear and AC Elite apparel. 15% of sales supports
+              Positive Adversity Youth Services.
             </p>
+            <div className="mt-7 grid gap-3 sm:grid-cols-2">
+              {shopTiles.map((tile) => (
+                <a
+                  key={tile.collection}
+                  href="#products"
+                  onClick={() => handleShopTileClick(tile.collection)}
+                  className="group relative min-h-24 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.07] p-4 shadow-[0_18px_50px_rgba(202,162,77,0.12)] hover:border-[#caa24d]/70 hover:bg-white/[0.1] hover:shadow-[0_20px_60px_rgba(202,162,77,0.2)]"
+                >
+                  <img
+                    src={acGoldLogo}
+                    alt=""
+                    className="absolute -right-8 -top-8 h-24 w-24 object-contain opacity-10 transition group-hover:opacity-20"
+                    aria-hidden="true"
+                  />
+                  <span className="relative block text-xs font-black uppercase tracking-[0.18em] text-[#caa24d]">
+                    Shop
+                  </span>
+                  <span className="relative mt-2 block text-lg font-black text-white">
+                    {tile.label}
+                  </span>
+                </a>
+              ))}
+            </div>
           </div>
 
           <div className="mt-8 flex flex-wrap gap-3">
             <a
               href="#products"
-              className="rounded-full bg-white px-6 py-3 text-sm font-black text-slate-950 hover:bg-slate-200"
+              className="rounded-full bg-[#1ed760] px-6 py-3 text-sm font-black text-slate-950 hover:bg-[#42f07f]"
             >
               Browse Products
             </a>
@@ -230,50 +294,68 @@ export default function Store() {
               href={DONATE_URL}
               target="_blank"
               rel="noreferrer"
-              className="rounded-full bg-[#f6b332] px-6 py-3 text-sm font-black text-slate-950 hover:bg-[#ffd166]"
+              className="rounded-full border border-[#caa24d]/60 bg-[#caa24d] px-6 py-3 text-sm font-black text-slate-950 hover:bg-[#e0bd68]"
             >
               Donate
             </a>
-            <div className="rounded-full border border-white/10 px-5 py-3 text-sm font-black text-slate-200">
+            <a
+              href={TEAM_DONATE_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full border border-[#00a8ff]/60 bg-[#00a8ff] px-6 py-3 text-sm font-black text-slate-950 hover:bg-[#35bcff]"
+            >
+              Donate to Team
+            </a>
+            <div className="rounded-full border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-black text-slate-200">
               {cartCount} item{cartCount === 1 ? "" : "s"} in cart
             </div>
           </div>
         </div>
 
-        <div className="flex items-center justify-center bg-white p-8">
-          <div className="w-full max-w-md">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <img
-                src={logo}
-                alt="Positive Adversity"
-                className="h-14 w-auto object-contain"
-              />
-              <span className="rounded-full bg-slate-950 px-4 py-2 text-xs font-black uppercase tracking-wide text-[#f6b332]">
-                Featured
+        <div className="relative flex min-h-[460px] items-center justify-center overflow-hidden bg-[#071629] p-8">
+          <div className="absolute inset-x-8 top-1/2 h-px bg-[#00a8ff]/30" />
+          <div className="absolute left-1/2 top-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#00a8ff]/25" />
+          <img
+            src={acGoldLogo}
+            alt=""
+            className="absolute -right-20 -top-16 h-64 w-64 rotate-12 object-contain opacity-10"
+            aria-hidden="true"
+          />
+          <div className="relative w-full max-w-md">
+            <div className="mb-4 flex items-center justify-end gap-3">
+              <span className="rounded-full bg-[#00a8ff] px-4 py-2 text-xs font-black uppercase tracking-wide text-slate-950">
+                Team Drop
               </span>
             </div>
 
             {featuredProduct ? (
-              <div className="rounded-[1.5rem] bg-slate-100 p-5">
-                <div className="flex aspect-square items-center justify-center rounded-[1.25rem] bg-white">
+              <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.08] p-5 shadow-2xl shadow-black/30">
+                <div className="relative -mx-2 aspect-square overflow-hidden rounded-[1.25rem] border border-white/10 bg-[#050b12] p-6 shadow-inner shadow-[#caa24d]/10 sm:mx-0">
                   <img
-                    src={featuredProduct.image}
-                    alt={featuredProduct.name}
-                    className="max-h-[78%] object-contain"
+                    src={acGoldLogo}
+                    alt="Gold AC logo"
+                    className="absolute left-1/2 top-1/2 h-[72%] w-[72%] -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_20px_42px_rgba(202,162,77,0.18)] sm:h-[68%] sm:w-[68%]"
                   />
                 </div>
-                <div className="mt-5 flex items-end justify-between gap-4">
+                <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <p className="text-sm font-black uppercase tracking-wide text-slate-500">
-                      {featuredProduct.category}
+                      Featured Team Store
                     </p>
-                    <h2 className="mt-1 text-2xl font-black text-slate-950">
-                      {featuredProduct.name}
+                    <h2 className="mt-1 text-2xl font-black text-white">
+                      AC Gear + AC Elite Apparel
                     </h2>
                   </div>
-                  <p className="text-3xl font-black text-slate-950">
-                    ${featuredProduct.price}
-                  </p>
+                  <div className="flex shrink-0 flex-col items-end gap-2 self-end sm:self-auto">
+                    <img
+                      src={logoFull}
+                      alt="Positive Adversity full logo"
+                      className="h-16 w-48 object-contain drop-shadow-[0_10px_20px_rgba(30,215,96,0.16)] sm:h-14 sm:w-36"
+                    />
+                    <p className="text-right text-sm font-black uppercase leading-5 tracking-wide text-[#caa24d]">
+                      15% supports PAYS
+                    </p>
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -289,7 +371,7 @@ export default function Store() {
                 Featured Drops
               </p>
               <h2 className="mt-2 text-3xl font-black text-white">
-                Shop the collection
+                Shop the team collection
               </h2>
             </div>
 
@@ -298,10 +380,13 @@ export default function Store() {
                 <button
                   key={category}
                   type="button"
-                  onClick={() => setActiveCategory(category)}
+                  onClick={() => {
+                    setActiveCategory(category);
+                    setActiveCollection("All");
+                  }}
                   className={`rounded-full px-4 py-2 text-sm font-black ${
-                    activeCategory === category
-                      ? "bg-white text-slate-950"
+                    activeCollection === "All" && activeCategory === category
+                      ? "bg-[#1ed760] text-slate-950"
                       : "bg-white/10 text-slate-200 hover:bg-white/15"
                   }`}
                 >
@@ -311,7 +396,28 @@ export default function Store() {
             </div>
           </div>
 
+          {activeCollection !== "All" ? (
+            <div className="mb-5 flex flex-wrap items-center gap-3">
+              <span className="rounded-full border border-[#caa24d]/50 bg-[#caa24d]/15 px-4 py-2 text-sm font-black text-[#f6d787]">
+                {activeCollection}
+              </span>
+              <button
+                type="button"
+                onClick={() => setActiveCollection("All")}
+                className="rounded-full bg-white/10 px-4 py-2 text-sm font-black text-slate-200 hover:bg-white/15"
+              >
+                Show All
+              </button>
+            </div>
+          ) : null}
+
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            {filteredProducts.length === 0 ? (
+              <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.06] p-6 text-sm font-semibold text-slate-300 sm:col-span-2 xl:col-span-3">
+                No products match this filter yet.
+              </div>
+            ) : null}
+
             {filteredProducts.map((product) => {
               const productSizes = getProductSizes(product);
               const selectedSize = getSelectedSize(product);
@@ -319,9 +425,15 @@ export default function Store() {
               return (
                 <article
                   key={product.id || product.name}
-                  className="group overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.06] shadow-xl shadow-black/20"
+                  className="group overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.06] shadow-xl shadow-black/20 hover:border-[#00a8ff]/60"
                 >
                   <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-white p-6">
+                    <img
+                      src={acGoldLogo}
+                      alt=""
+                      className="absolute -right-10 -top-10 h-28 w-28 object-contain opacity-10"
+                      aria-hidden="true"
+                    />
                     {product.featured ? (
                       <span className="absolute left-4 top-4 z-10 rounded-full bg-[#f6b332] px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-950">
                         Featured
@@ -333,7 +445,7 @@ export default function Store() {
                       </span>
                     ) : null}
                     <img
-                      src={product.image || logo}
+                      src={product.image || logoFull}
                       alt={product.name}
                       className="max-h-[78%] object-contain transition duration-300 group-hover:scale-105"
                     />
@@ -357,7 +469,7 @@ export default function Store() {
                           onChange={(event) =>
                             handleSizeChange(product, event.target.value)
                           }
-                          className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-3 text-sm font-bold text-white outline-none focus:border-[#f6b332] focus:ring-2 focus:ring-[#f6b332]/20"
+                          className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-3 text-sm font-bold text-white outline-none focus:border-[#00a8ff] focus:ring-2 focus:ring-[#00a8ff]/20"
                         >
                           {productSizes.map((size) => (
                             <option key={size} value={size}>
@@ -376,7 +488,7 @@ export default function Store() {
                         type="button"
                         onClick={() => handleAddToCart(product)}
                         disabled={!product.inStock}
-                        className="rounded-full bg-[#f6b332] px-5 py-3 text-sm font-black text-slate-950 hover:bg-[#ffd166] disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-full bg-[#1ed760] px-5 py-3 text-sm font-black text-slate-950 hover:bg-[#42f07f] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Add
                       </button>

@@ -12,7 +12,7 @@ const navClass = ({ isActive }) =>
 
 const actions = [
   {
-    title: "Shop Gear",
+    title: "Team Gear",
     text: "Browse apparel and community merchandise.",
     to: "/store",
   },
@@ -22,7 +22,7 @@ const actions = [
     to: "/events",
   },
   {
-    title: "Mission",
+    title: "Youth Services",
     text: "Learn about the work behind the brand.",
     to: "/mission",
   },
@@ -52,7 +52,7 @@ export default function HomePage() {
               Home
             </NavLink>
             <NavLink to="/store" className={navClass}>
-              Store
+              Team Gear
             </NavLink>
             <NavLink to="/events" className={navClass}>
               Events
@@ -78,14 +78,14 @@ export default function HomePage() {
       <section className="mx-auto grid min-h-[calc(100vh-88px)] max-w-7xl items-center gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[1.15fr_0.85fr]">
         <div>
           <p className="text-sm font-black uppercase tracking-[0.28em] text-[#f6b332]">
-            Youth services and community impact
+            Youth Services, Events, and Team Gear
           </p>
           <h1 className="mt-5 max-w-4xl text-5xl font-black leading-[0.95] text-white sm:text-7xl">
             Positive Adversity
           </h1>
           <p className="mt-6 max-w-2xl text-lg font-semibold leading-8 text-slate-300">
-            A stronger public home for programs, events, donations, and branded
-            gear that supports the mission.
+            Empowering young people through youth services, community events,
+            donations, and team gear that helps support the mission.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
@@ -93,7 +93,7 @@ export default function HomePage() {
               to="/store"
               className="rounded-full bg-white px-6 py-3 text-sm font-black text-slate-950 hover:bg-slate-200"
             >
-              Shop Store
+              Shop Team Gear
             </Link>
             <a
               href={DONATE_URL}
