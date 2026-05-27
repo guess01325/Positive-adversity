@@ -22,8 +22,8 @@ const actions = [
     to: "/events",
   },
   {
-    title: "Youth Services",
-    text: "Learn about the work behind the brand.",
+    title: "Mission Statement",
+    text: "Learn about the purpose behind the work.",
     to: "/mission",
   },
 ];
