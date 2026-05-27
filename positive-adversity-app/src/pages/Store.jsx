@@ -356,16 +356,20 @@ export default function Store() {
                     className="absolute -right-12 top-0 h-48 w-48 object-contain opacity-10"
                     aria-hidden="true"
                   />
-                  <img
-                    src={logoFull}
-                    alt="Positive Adversity full logo"
-                    className="relative z-10 self-center justify-self-center object-contain drop-shadow-[0_20px_42px_rgba(30,215,96,0.16)]"
-                  />
-                  <img
-                    src={acGoldLogo}
-                    alt="Gold AC logo"
-                    className="relative z-10 h-[82%] w-[82%] self-center justify-self-center object-contain drop-shadow-[0_20px_42px_rgba(202,162,77,0.18)]"
-                  />
+                  <div className="relative z-10 flex h-full min-w-0 items-center justify-center">
+                    <img
+                      src={logoFull}
+                      alt="Positive Adversity full logo"
+                      className="h-[82%] w-full object-contain drop-shadow-[0_20px_42px_rgba(30,215,96,0.16)]"
+                    />
+                  </div>
+                  <div className="relative z-10 flex h-full min-w-0 items-center justify-center">
+                    <img
+                      src={acGoldLogo}
+                      alt="Gold AC logo"
+                      className="h-[82%] w-full object-contain drop-shadow-[0_20px_42px_rgba(202,162,77,0.18)]"
+                    />
+                  </div>
                 </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   {featuredProductsByStore.map((tile) =>
