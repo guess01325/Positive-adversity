@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   createProduct,
   deleteProduct,
@@ -7,9 +7,11 @@ import {
 } from "../lib/firestore";
 import {
   initialProductForm,
+  getProductStore,
   normalizeProductForm,
   productCategories,
   productSizesByCategory,
+  productStores,
   productToForm,
 } from "../lib/products";
 import { formatCurrency } from "../lib/utils";
@@ -23,6 +25,18 @@ export default function AdminProductsPage() {
   const [deletingProductId, setDeletingProductId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  const selectedStoreLabel =
+    productStores.find((store) => store.value === productForm.store)?.label ||
+    "Positive Adversity Gear";
+
+  const visibleProducts = useMemo(
+    () =>
+      products.filter(
+        (product) => getProductStore(product) === productForm.store,
+      ),
+    [productForm.store, products],
+  );
 
   async function loadProducts() {
     try {
@@ -211,6 +225,22 @@ export default function AdminProductsPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <label className="text-sm font-semibold text-slate-700">
+              Store
+              <select
+                name="store"
+                value={productForm.store}
+                onChange={handleFormChange}
+                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-normal"
+              >
+                {productStores.map((store) => (
+                  <option key={store.value} value={store.value}>
+                    {store.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-sm font-semibold text-slate-700">
               Category
               <select
                 name="category"
@@ -295,7 +325,7 @@ export default function AdminProductsPage() {
                 onChange={handleFormChange}
                 className="h-4 w-4 rounded border-slate-300"
               />
-              Featured
+              Featured in this store
             </label>
 
             <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -325,6 +355,20 @@ export default function AdminProductsPage() {
       </section>
 
       <section className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              Product List
+            </p>
+            <h2 className="text-xl font-bold text-slate-900">
+              {selectedStoreLabel} Products
+            </h2>
+          </div>
+          <span className="rounded-full bg-slate-900 px-3 py-1 text-sm font-bold text-white">
+            {visibleProducts.length}
+          </span>
+        </div>
+
         {loading ? (
           <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
             Loading products...
@@ -333,8 +377,12 @@ export default function AdminProductsPage() {
           <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
             No products created yet.
           </p>
+        ) : visibleProducts.length === 0 ? (
+          <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+            No products created for {selectedStoreLabel} yet.
+          </p>
         ) : (
-          products.map((product) => (
+          visibleProducts.map((product) => (
             <article
               key={product.id}
               className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
@@ -355,7 +403,11 @@ export default function AdminProductsPage() {
 
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {product.inStock === false ? "Out of Stock" : "In Stock"}
+                      {productStores.find(
+                        (store) => store.value === getProductStore(product),
+                      )?.label || "Positive Adversity Gear"}{" "}
+                      · {product.inStock === false ? "Out of Stock" : "In Stock"}
+                      {product.featured ? " · Featured" : ""}
                     </p>
                     <h2 className="mt-1 text-xl font-bold text-slate-900">
                       {product.name}

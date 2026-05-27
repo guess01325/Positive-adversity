@@ -46,11 +46,23 @@ export const initialProductForm = {
   price: "",
   description: "",
   image: "",
+  store: "positive-adversity-gear",
   category: "Shirts",
   sizes: [],
   featured: false,
   inStock: true,
 };
+
+export const productStores = [
+  {
+    value: "positive-adversity-gear",
+    label: "Positive Adversity Gear",
+  },
+  {
+    value: "ac-gear",
+    label: "AC Gear",
+  },
+];
 
 export const productCategories = [
   "Shirts",
@@ -79,12 +91,20 @@ export const productSizesByCategory = {
   ],
 };
 
+export function getProductStore(product) {
+  if (product?.store) return product.store;
+  return product?.category === "Accessories/Merch"
+    ? "ac-gear"
+    : "positive-adversity-gear";
+}
+
 export function normalizeProductForm(form) {
   return {
     name: form.name.trim(),
     price: Number(form.price || 0),
     description: form.description.trim(),
     image: form.image.trim(),
+    store: form.store || "positive-adversity-gear",
     category: form.category.trim(),
     sizes: Array.isArray(form.sizes) ? form.sizes : [],
     featured: Boolean(form.featured),
@@ -98,6 +118,7 @@ export function productToForm(product) {
     price: product.price ?? "",
     description: product.description || "",
     image: product.image || "",
+    store: getProductStore(product),
     category: product.category || "Shirts",
     sizes: Array.isArray(product.sizes) ? product.sizes : [],
     featured: Boolean(product.featured),

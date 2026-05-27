@@ -3,18 +3,18 @@ import acGoldLogo from "../assets/ac-gold-logo.png";
 import logoFull from "../assets/logo-full.png";
 import { DONATE_URL, TEAM_DONATE_URL } from "../lib/constants";
 import { createOrder, fetchProducts } from "../lib/firestore";
-import { storeProducts } from "../lib/products";
+import { getProductStore, storeProducts } from "../lib/products";
 
 const shopTiles = [
   {
-    label: "AC Gear",
-    collection: "AC Gear",
-    categories: ["Accessories/Merch"],
+    label: "Positive Adversity Gear",
+    collection: "positive-adversity-gear",
+    logo: logoFull,
   },
   {
-    label: "AC Elite Apparel",
-    collection: "AC Elite Apparel",
-    excludeCategories: ["Accessories/Merch"],
+    label: "AC Gear",
+    collection: "ac-gear",
+    logo: acGoldLogo,
   },
 ];
 
@@ -83,23 +83,30 @@ export default function Store() {
         return categoryProducts;
       }
 
-      return categoryProducts.filter((product) => {
-        if (Array.isArray(activeTile.categories)) {
-          return activeTile.categories.includes(product.category);
-        }
-
-        if (Array.isArray(activeTile.excludeCategories)) {
-          return !activeTile.excludeCategories.includes(product.category);
-        }
-
-        return true;
-      });
+      return categoryProducts.filter(
+        (product) => getProductStore(product) === activeTile.collection,
+      );
     },
     [activeCategory, activeCollection, products],
   );
 
-  const featuredProduct =
-    products.find((product) => product.featured) || products[0];
+  const featuredProductsByStore = useMemo(
+    () =>
+      shopTiles.map((tile) => {
+        const storeProductsForTile = products.filter(
+          (product) => getProductStore(product) === tile.collection,
+        );
+        const product =
+          storeProductsForTile.find((storeProduct) => storeProduct.featured) ||
+          storeProductsForTile[0];
+
+        return {
+          ...tile,
+          product,
+        };
+      }),
+    [products],
+  );
 
   const cartTotal = useMemo(
     () =>
@@ -249,13 +256,13 @@ export default function Store() {
         <div className="relative flex min-h-[460px] flex-col justify-between p-6 sm:p-8 lg:p-10">
           <div>
             <p className="text-sm font-black uppercase tracking-[0.28em] text-[#1ed760]">
-              AC Elite Team Store
+              PA Store + Team Store
             </p>
             <h1 className="mt-5 max-w-3xl text-5xl font-black leading-none text-white sm:text-6xl">
-              AC Elite gear for the squad.
+              Positive Adversity and AC Elite gear.
             </h1>
             <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-slate-300">
-              Shop AC Gear and AC Elite apparel. 15% of sales supports
+              Shop Positive Adversity apparel and AC Gear. 15% of sales supports
               Positive Adversity Youth Services.
             </p>
             <div className="mt-7 grid gap-3 sm:grid-cols-2">
@@ -267,7 +274,7 @@ export default function Store() {
                   className="group relative min-h-24 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.07] p-4 shadow-[0_18px_50px_rgba(202,162,77,0.12)] hover:border-[#caa24d]/70 hover:bg-white/[0.1] hover:shadow-[0_20px_60px_rgba(202,162,77,0.2)]"
                 >
                   <img
-                    src={acGoldLogo}
+                    src={tile.logo}
                     alt=""
                     className="absolute -right-8 -top-8 h-24 w-24 object-contain opacity-10 transition group-hover:opacity-20"
                     aria-hidden="true"
@@ -321,29 +328,74 @@ export default function Store() {
             className="absolute -right-20 -top-16 h-64 w-64 rotate-12 object-contain opacity-10"
             aria-hidden="true"
           />
+          <img
+            src={logoFull}
+            alt=""
+            className="absolute -bottom-20 -left-20 h-72 w-72 -rotate-6 object-contain opacity-10"
+            aria-hidden="true"
+          />
           <div className="relative w-full max-w-md">
             <div className="mb-4 flex items-center justify-end gap-3">
               <span className="rounded-full bg-[#00a8ff] px-4 py-2 text-xs font-black uppercase tracking-wide text-slate-950">
-                Team Drop
+                Store Drop
               </span>
             </div>
 
-            {featuredProduct ? (
+            {featuredProductsByStore.some((tile) => tile.product) ? (
               <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.08] p-5 shadow-2xl shadow-black/30">
-                <div className="relative -mx-2 aspect-square overflow-hidden rounded-[1.25rem] border border-white/10 bg-[#050b12] p-6 shadow-inner shadow-[#caa24d]/10 sm:mx-0">
+                <div className="relative -mx-2 grid aspect-square grid-cols-2 overflow-hidden rounded-[1.25rem] border border-white/10 bg-[#050b12] p-6 shadow-inner shadow-[#caa24d]/10 sm:mx-0">
+                  <img
+                    src={logoFull}
+                    alt=""
+                    className="absolute -left-12 bottom-0 h-48 w-48 object-contain opacity-10"
+                    aria-hidden="true"
+                  />
+                  <img
+                    src={acGoldLogo}
+                    alt=""
+                    className="absolute -right-12 top-0 h-48 w-48 object-contain opacity-10"
+                    aria-hidden="true"
+                  />
+                  <img
+                    src={logoFull}
+                    alt="Positive Adversity full logo"
+                    className="relative z-10 self-center justify-self-center object-contain drop-shadow-[0_20px_42px_rgba(30,215,96,0.16)]"
+                  />
                   <img
                     src={acGoldLogo}
                     alt="Gold AC logo"
-                    className="absolute left-1/2 top-1/2 h-[72%] w-[72%] -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_20px_42px_rgba(202,162,77,0.18)] sm:h-[68%] sm:w-[68%]"
+                    className="relative z-10 h-[82%] w-[82%] self-center justify-self-center object-contain drop-shadow-[0_20px_42px_rgba(202,162,77,0.18)]"
                   />
                 </div>
-                <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  {featuredProductsByStore.map((tile) =>
+                    tile.product ? (
+                      <a
+                        key={tile.collection}
+                        href="#products"
+                        onClick={() => handleShopTileClick(tile.collection)}
+                        className="rounded-2xl border border-white/10 bg-white/[0.07] p-4 hover:border-[#caa24d]/60 hover:bg-white/[0.1]"
+                      >
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-[#caa24d]">
+                          Featured
+                        </p>
+                        <p className="mt-1 text-sm font-black text-white">
+                          {tile.label}
+                        </p>
+                        <p className="mt-1 truncate text-sm font-semibold text-slate-300">
+                          {tile.product.name}
+                        </p>
+                      </a>
+                    ) : null,
+                  )}
+                </div>
+                <div className="mt-5 flex flex-col gap-4 border-t border-white/10 pt-5 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <p className="text-sm font-black uppercase tracking-wide text-slate-500">
-                      Featured Team Store
+                      Featured Stores
                     </p>
                     <h2 className="mt-1 text-2xl font-black text-white">
-                      AC Gear + AC Elite Apparel
+                      PA Store + AC Gear
                     </h2>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-2 self-end sm:self-auto">
@@ -371,7 +423,7 @@ export default function Store() {
                 Featured Drops
               </p>
               <h2 className="mt-2 text-3xl font-black text-white">
-                Shop the team collection
+                Shop the stores
               </h2>
             </div>
 
@@ -399,7 +451,8 @@ export default function Store() {
           {activeCollection !== "All" ? (
             <div className="mb-5 flex flex-wrap items-center gap-3">
               <span className="rounded-full border border-[#caa24d]/50 bg-[#caa24d]/15 px-4 py-2 text-sm font-black text-[#f6d787]">
-                {activeCollection}
+                {shopTiles.find((tile) => tile.collection === activeCollection)
+                  ?.label || activeCollection}
               </span>
               <button
                 type="button"
@@ -421,6 +474,10 @@ export default function Store() {
             {filteredProducts.map((product) => {
               const productSizes = getProductSizes(product);
               const selectedSize = getSelectedSize(product);
+              const productStore = getProductStore(product);
+              const productStoreTile = shopTiles.find(
+                (tile) => tile.collection === productStore,
+              );
 
               return (
                 <article
@@ -429,7 +486,7 @@ export default function Store() {
                 >
                   <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-white p-6">
                     <img
-                      src={acGoldLogo}
+                      src={productStoreTile?.logo || logoFull}
                       alt=""
                       className="absolute -right-10 -top-10 h-28 w-28 object-contain opacity-10"
                       aria-hidden="true"

@@ -12,8 +12,8 @@ const navClass = ({ isActive }) =>
 
 const actions = [
   {
-    title: "Team Gear",
-    text: "Browse apparel and community merchandise.",
+    title: "Shop",
+    text: "Browse the PA Store and Team Store.",
     to: "/store",
   },
   {
@@ -52,7 +52,7 @@ export default function HomePage() {
               Home
             </NavLink>
             <NavLink to="/store" className={navClass}>
-              Team Gear
+              Shop
             </NavLink>
             <NavLink to="/events" className={navClass}>
               Events
@@ -78,14 +78,14 @@ export default function HomePage() {
       <section className="mx-auto grid min-h-[calc(100vh-88px)] max-w-7xl items-center gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[1.15fr_0.85fr]">
         <div>
           <p className="text-sm font-black uppercase tracking-[0.28em] text-[#f6b332]">
-            Youth Services, Events, and Team Gear
+            Youth Services, Events, and Stores
           </p>
           <h1 className="mt-5 max-w-4xl text-5xl font-black leading-[0.95] text-white sm:text-7xl">
             Positive Adversity
           </h1>
           <p className="mt-6 max-w-2xl text-lg font-semibold leading-8 text-slate-300">
             Empowering young people through youth services, community events,
-            donations, and team gear that helps support the mission.
+            donations, and shop sales that help support the mission.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
@@ -93,7 +93,7 @@ export default function HomePage() {
               to="/store"
               className="rounded-full bg-white px-6 py-3 text-sm font-black text-slate-950 hover:bg-slate-200"
             >
-              Shop Team Gear
+              Shop
             </Link>
             <a
               href={DONATE_URL}
