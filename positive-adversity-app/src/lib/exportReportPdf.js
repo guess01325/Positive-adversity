@@ -82,6 +82,73 @@ function getInternalTotal(entry) {
   return Number((hours * internalRate).toFixed(2));
 }
 
+function getStudentLabel(entry) {
+  return (entry?.student || "No student").trim() || "No student";
+}
+
+function getEntryDateValue(entry) {
+  return entry?.date || entry?.startTime || "";
+}
+
+function buildGroupedEntryRows(entries) {
+  const sortedEntries = [...entries].sort((a, b) => {
+    const studentCompare = getStudentLabel(a).localeCompare(
+      getStudentLabel(b),
+      undefined,
+      { sensitivity: "base" },
+    );
+
+    if (studentCompare !== 0) return studentCompare;
+
+    return getEntryDateValue(a).localeCompare(getEntryDateValue(b));
+  });
+
+  let currentStudent = "";
+
+  return sortedEntries.flatMap((entry) => {
+    const student = getStudentLabel(entry);
+    const rows = [];
+
+    if (student !== currentStudent) {
+      currentStudent = student;
+      rows.push([
+        {
+          content: `Student: ${student}`,
+          colSpan: 7,
+          styles: {
+            fillColor: [226, 232, 240],
+            fontStyle: "bold",
+            textColor: [15, 23, 42],
+          },
+        },
+      ]);
+    }
+
+    rows.push([
+      student,
+      entry?.serviceType || "-",
+      entry?.date || formatDate(entry?.startTime),
+      `${formatTime(entry?.startTime)} - ${formatTime(entry?.endTime)}`,
+      Number(entry?.hours || 0).toFixed(2),
+      formatCurrency(entry?.internalRate || 0),
+      formatCurrency(getInternalTotal(entry)),
+    ]);
+
+    rows.push([
+      {
+        content: `Note: ${entry?.note || "-"}`,
+        colSpan: 7,
+        styles: {
+          textColor: [70, 70, 70],
+          fillColor: [248, 250, 252],
+        },
+      },
+    ]);
+
+    return rows;
+  });
+}
+
 export async function exportEntriesPdf({
   entries = [],
   selectedMonth = "all",
@@ -169,30 +236,7 @@ export async function exportEntriesPdf({
       "Internal Rate",
       "Internal Total",
     ]],
-    body: entries.flatMap((entry) => {
-      const mainRow = [
-        entry?.student || "-",
-        entry?.serviceType || "-",
-        entry?.date || formatDate(entry?.startTime),
-        `${formatTime(entry?.startTime)} - ${formatTime(entry?.endTime)}`,
-        Number(entry?.hours || 0).toFixed(2),
-        formatCurrency(entry?.internalRate || 0),
-        formatCurrency(getInternalTotal(entry)),
-      ];
-
-      const noteRow = [
-        {
-          content: `Note: ${entry?.note || "-"}`,
-          colSpan: 7,
-          styles: {
-            textColor: [70, 70, 70],
-            fillColor: [248, 250, 252],
-          },
-        },
-      ];
-
-      return [mainRow, noteRow];
-    }),
+    body: buildGroupedEntryRows(entries),
     styles: {
       font: "helvetica",
       fontSize: 8,
