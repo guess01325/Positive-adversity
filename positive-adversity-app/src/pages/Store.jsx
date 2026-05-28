@@ -181,6 +181,15 @@ export default function Store() {
   function handleShopTileClick(collection) {
     setActiveCollection(collection);
     setActiveCategory("All");
+    scrollToProducts();
+  }
+
+  function scrollToProducts() {
+    requestAnimationFrame(() => {
+      document
+        .getElementById("products")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function handleUpdateQuantity(itemName, itemSize, change) {
@@ -267,11 +276,11 @@ export default function Store() {
             </p>
             <div className="mt-7 grid gap-3 sm:grid-cols-2">
               {shopTiles.map((tile) => (
-                <a
+                <button
                   key={tile.collection}
-                  href="#products"
+                  type="button"
                   onClick={() => handleShopTileClick(tile.collection)}
-                  className="group relative min-h-24 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.07] p-4 shadow-[0_18px_50px_rgba(202,162,77,0.12)] hover:border-[#caa24d]/70 hover:bg-white/[0.1] hover:shadow-[0_20px_60px_rgba(202,162,77,0.2)]"
+                  className="group relative min-h-24 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.07] p-4 text-left shadow-[0_18px_50px_rgba(202,162,77,0.12)] hover:border-[#caa24d]/70 hover:bg-white/[0.1] hover:shadow-[0_20px_60px_rgba(202,162,77,0.2)]"
                 >
                   <img
                     src={tile.logo}
@@ -285,18 +294,19 @@ export default function Store() {
                   <span className="relative mt-2 block text-lg font-black text-white">
                     {tile.label}
                   </span>
-                </a>
+                </button>
               ))}
             </div>
           </div>
 
           <div className="mt-8 flex flex-wrap gap-3">
-            <a
-              href="#products"
+            <button
+              type="button"
+              onClick={scrollToProducts}
               className="rounded-full bg-[#1ed760] px-6 py-3 text-sm font-black text-slate-950 hover:bg-[#42f07f]"
             >
               Browse Products
-            </a>
+            </button>
             <a
               href={DONATE_URL}
               target="_blank"
@@ -374,11 +384,11 @@ export default function Store() {
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   {featuredProductsByStore.map((tile) =>
                     tile.product ? (
-                      <a
+                      <button
                         key={tile.collection}
-                        href="#products"
+                        type="button"
                         onClick={() => handleShopTileClick(tile.collection)}
-                        className="rounded-2xl border border-white/10 bg-white/[0.07] p-4 hover:border-[#caa24d]/60 hover:bg-white/[0.1]"
+                        className="rounded-2xl border border-white/10 bg-white/[0.07] p-4 text-left hover:border-[#caa24d]/60 hover:bg-white/[0.1]"
                       >
                         <p className="text-xs font-black uppercase tracking-[0.16em] text-[#caa24d]">
                           Featured
@@ -389,7 +399,7 @@ export default function Store() {
                         <p className="mt-1 truncate text-sm font-semibold text-slate-300">
                           {tile.product.name}
                         </p>
-                      </a>
+                      </button>
                     ) : null,
                   )}
                 </div>
