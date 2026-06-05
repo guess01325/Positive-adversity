@@ -49,6 +49,7 @@ export const initialProductForm = {
   store: "positive-adversity-gear",
   category: "Shirts",
   sizes: [],
+  inventory: {},
   featured: false,
   inStock: true,
 };
@@ -73,9 +74,9 @@ export const productCategories = [
 ];
 
 export const productSizesByCategory = {
-  Shirts: ["XS", "S", "M", "L", "XL", "2XL", "3XL"],
-  Shorts: ["XS", "S", "M", "L", "XL", "2XL", "3XL"],
-  Pants: ["XS", "S", "M", "L", "XL", "2XL", "3XL"],
+  Shirts: ["YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL"],
+  Shorts: ["YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL"],
+  Pants: ["YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL"],
   "Accessories/Merch": ["One Size"],
   Shoes: [
     "5",
@@ -99,6 +100,12 @@ export function getProductStore(product) {
 }
 
 export function normalizeProductForm(form) {
+  const sizes = Array.isArray(form.sizes) ? form.sizes : [];
+  const inventory = sizes.reduce((currentInventory, size) => {
+    currentInventory[size] = Math.max(0, Number(form.inventory?.[size] || 0));
+    return currentInventory;
+  }, {});
+
   return {
     name: form.name.trim(),
     price: Number(form.price || 0),
@@ -106,13 +113,23 @@ export function normalizeProductForm(form) {
     image: form.image.trim(),
     store: form.store || "positive-adversity-gear",
     category: form.category.trim(),
-    sizes: Array.isArray(form.sizes) ? form.sizes : [],
+    sizes,
+    inventory,
     featured: Boolean(form.featured),
     inStock: Boolean(form.inStock),
   };
 }
 
 export function productToForm(product) {
+  const sizes = Array.isArray(product.sizes) ? product.sizes : [];
+  const inventory = sizes.reduce((currentInventory, size) => {
+    currentInventory[size] = Math.max(
+      0,
+      Number(product.inventory?.[size] ?? 0),
+    );
+    return currentInventory;
+  }, {});
+
   return {
     name: product.name || "",
     price: product.price ?? "",
@@ -120,7 +137,8 @@ export function productToForm(product) {
     image: product.image || "",
     store: getProductStore(product),
     category: product.category || "Shirts",
-    sizes: Array.isArray(product.sizes) ? product.sizes : [],
+    sizes,
+    inventory,
     featured: Boolean(product.featured),
     inStock: product.inStock !== false,
   };

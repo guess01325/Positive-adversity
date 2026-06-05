@@ -31,6 +31,24 @@ const initialCheckoutForm = {
   paymentReferenceId: "",
 };
 
+const paymentMethods = [
+  {
+    value: "cashapp",
+    label: "Cash App",
+    paymentUrl: "https://cash.app/$AllanChaney",
+  },
+  {
+    value: "venmo",
+    label: "Venmo",
+    paymentUrl: "https://venmo.com/u/AllanVChaney",
+  },
+  {
+    value: "paypal",
+    label: "PayPal",
+    paymentUrl: "https://paypal.me/allanc03",
+  },
+];
+
 export default function Store() {
   const [products, setProducts] = useState(storeProducts);
   const [activeCategory, setActiveCategory] = useState("All");
@@ -127,11 +145,52 @@ export default function Store() {
     return Array.isArray(product.sizes) ? product.sizes.filter(Boolean) : [];
   }
 
+  function hasTrackedInventory(product, size) {
+    return Object.prototype.hasOwnProperty.call(product.inventory || {}, size);
+  }
+
+  function getSizeQuantity(product, size) {
+    if (!size || !hasTrackedInventory(product, size)) {
+      return Infinity;
+    }
+
+    return Math.max(0, Number(product.inventory?.[size] || 0));
+  }
+
+  function isSizeSoldOut(product, size) {
+    return product.inStock === false || getSizeQuantity(product, size) <= 0;
+  }
+
+  function isProductSoldOut(product) {
+    const sizes = getProductSizes(product);
+
+    if (product.inStock === false) return true;
+    if (sizes.length === 0) return false;
+
+    return sizes.every((size) => isSizeSoldOut(product, size));
+  }
+
+  function getCartQuantity(product, size, items = cartItems) {
+    return items.reduce((total, item) => {
+      const sameProduct =
+        (item.productId && item.productId === product.id) ||
+        item.name === product.name;
+      const sameSize = (item.size || "") === (size || "");
+
+      return sameProduct && sameSize ? total + item.quantity : total;
+    }, 0);
+  }
+
   function getSelectedSize(product) {
     const productKey = getProductKey(product);
     const sizes = getProductSizes(product);
+    const savedSize = selectedSizes[productKey];
 
-    return selectedSizes[productKey] || sizes[0] || "";
+    if (savedSize && sizes.includes(savedSize) && !isSizeSoldOut(product, savedSize)) {
+      return savedSize;
+    }
+
+    return sizes.find((size) => !isSizeSoldOut(product, size)) || sizes[0] || "";
   }
 
   function handleSizeChange(product, size) {
@@ -153,6 +212,21 @@ export default function Store() {
       return;
     }
 
+    if (isProductSoldOut(product) || isSizeSoldOut(product, size)) {
+      setError(`${product.name}${size ? ` in size ${size}` : ""} is sold out.`);
+      return;
+    }
+
+    const availableQuantity = getSizeQuantity(product, size);
+    const quantityInCart = getCartQuantity(product, size);
+
+    if (quantityInCart >= availableQuantity) {
+      setError(
+        `Only ${availableQuantity} ${product.name}${size ? ` in size ${size}` : ""} available.`,
+      );
+      return;
+    }
+
     setCartItems((currentItems) => {
       const existingItem = currentItems.find(
         (item) => item.name === product.name && (item.size || "") === size,
@@ -169,6 +243,7 @@ export default function Store() {
       return [
         ...currentItems,
         {
+          productId: product.id || "",
           name: product.name,
           size,
           quantity: 1,
@@ -193,15 +268,38 @@ export default function Store() {
   }
 
   function handleUpdateQuantity(itemName, itemSize, change) {
-    setCartItems((currentItems) =>
-      currentItems
+    setError("");
+
+    setCartItems((currentItems) => {
+      const cartItem = currentItems.find(
+        (item) => item.name === itemName && (item.size || "") === (itemSize || ""),
+      );
+      const product = products.find(
+        (currentProduct) =>
+          (cartItem?.productId && currentProduct.id === cartItem.productId) ||
+          currentProduct.name === itemName,
+      );
+
+      if (change > 0 && product) {
+        const availableQuantity = getSizeQuantity(product, itemSize || "");
+        const quantityInCart = getCartQuantity(product, itemSize || "", currentItems);
+
+        if (quantityInCart >= availableQuantity) {
+          setError(
+            `Only ${availableQuantity} ${itemName}${itemSize ? ` in size ${itemSize}` : ""} available.`,
+          );
+          return currentItems;
+        }
+      }
+
+      return currentItems
         .map((item) =>
           item.name === itemName && (item.size || "") === (itemSize || "")
             ? { ...item, quantity: item.quantity + change }
             : item,
         )
-        .filter((item) => item.quantity > 0),
-    );
+        .filter((item) => item.quantity > 0);
+    });
   }
 
   function handleCheckoutChange(event) {
@@ -220,6 +318,35 @@ export default function Store() {
 
     if (cartItems.length === 0) {
       setError("Add at least one item to your cart before submitting.");
+      return;
+    }
+
+    const unavailableItem = cartItems.find((item) => {
+      const product = products.find(
+        (currentProduct) =>
+          (item.productId && currentProduct.id === item.productId) ||
+          currentProduct.name === item.name,
+      );
+
+      return (
+        product &&
+        getSizeQuantity(product, item.size || "") < item.quantity
+      );
+    });
+
+    if (unavailableItem) {
+      setError(
+        `Only ${getSizeQuantity(
+          products.find(
+            (product) =>
+              (unavailableItem.productId && product.id === unavailableItem.productId) ||
+              product.name === unavailableItem.name,
+          ),
+          unavailableItem.size || "",
+        )} ${unavailableItem.name}${
+          unavailableItem.size ? ` in size ${unavailableItem.size}` : ""
+        } available.`,
+      );
       return;
     }
 
@@ -488,6 +615,9 @@ export default function Store() {
             {filteredProducts.map((product) => {
               const productSizes = getProductSizes(product);
               const selectedSize = getSelectedSize(product);
+              const selectedSizeSoldOut =
+                productSizes.length > 0 && isSizeSoldOut(product, selectedSize);
+              const productSoldOut = isProductSoldOut(product);
               const productStore = getProductStore(product);
               const productStoreTile = shopTiles.find(
                 (tile) => tile.collection === productStore,
@@ -510,7 +640,7 @@ export default function Store() {
                         Featured
                       </span>
                     ) : null}
-                    {!product.inStock ? (
+                    {productSoldOut ? (
                       <span className="absolute right-4 top-4 z-10 rounded-full bg-slate-950 px-3 py-1 text-xs font-black uppercase tracking-wide text-white">
                         Sold Out
                       </span>
@@ -543,11 +673,21 @@ export default function Store() {
                           className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-3 text-sm font-bold text-white outline-none focus:border-[#00a8ff] focus:ring-2 focus:ring-[#00a8ff]/20"
                         >
                           {productSizes.map((size) => (
-                            <option key={size} value={size}>
+                            <option
+                              key={size}
+                              value={size}
+                              disabled={isSizeSoldOut(product, size)}
+                            >
                               {size}
+                              {isSizeSoldOut(product, size) ? " - Sold Out" : ""}
                             </option>
                           ))}
                         </select>
+                        {selectedSizeSoldOut ? (
+                          <p className="mt-2 text-xs font-bold uppercase tracking-wide text-[#f6b332]">
+                            Sold out in {selectedSize}
+                          </p>
+                        ) : null}
                       </div>
                     ) : null}
 
@@ -558,10 +698,10 @@ export default function Store() {
                       <button
                         type="button"
                         onClick={() => handleAddToCart(product)}
-                        disabled={!product.inStock}
+                        disabled={productSoldOut || selectedSizeSoldOut}
                         className="rounded-full bg-[#1ed760] px-5 py-3 text-sm font-black text-slate-950 hover:bg-[#42f07f] disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Add
+                        {productSoldOut || selectedSizeSoldOut ? "Sold Out" : "Add"}
                       </button>
                     </div>
                   </div>
@@ -648,6 +788,20 @@ export default function Store() {
             <div className="flex items-center justify-between">
               <p className="text-lg font-black">Total</p>
               <p className="text-3xl font-black">${cartTotal}</p>
+            </div>
+
+            <div className="mt-4 grid gap-2">
+              {paymentMethods.map((method) => (
+                <a
+                  key={method.value}
+                  href={method.paymentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full rounded-full bg-slate-950 px-4 py-3 text-center text-sm font-black text-white hover:bg-slate-800"
+                >
+                  Pay with {method.label}
+                </a>
+              ))}
             </div>
 
             <form className="mt-5 space-y-4" onSubmit={handleSubmitOrder}>
@@ -759,20 +913,22 @@ export default function Store() {
                   required
                 >
                   <option value="">Select payment method</option>
-                  <option value="paypal">PayPal</option>
-                  <option value="venmo">Venmo</option>
-                  <option value="cashapp">Cash App</option>
+                  {paymentMethods.map((method) => (
+                    <option key={method.value} value={method.value}>
+                      {method.label}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <label>Payment Reference ID</label>
+                <label>Your Payment Username or Confirmation ID</label>
                 <input
                   type="text"
                   name="paymentReferenceId"
                   value={checkoutForm.paymentReferenceId}
                   onChange={handleCheckoutChange}
-                  placeholder="Optional"
+                  placeholder="Example: @yourvenmo, $yourcashapp, PayPal email, or transaction ID"
                 />
               </div>
 

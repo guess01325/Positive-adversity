@@ -6,6 +6,7 @@ import {
   getDoc,
   getDocs,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -626,14 +627,72 @@ export async function updateUserDisplayName(uid, displayName) {
 }
 
 export async function createOrder(orderData) {
-  const docRef = await addDoc(collection(db, "orders"), {
-    ...orderData,
-    status: "pending",
-    paymentConfirmed: false,
-    createdAt: serverTimestamp(),
+  const orderRef = doc(collection(db, "orders"));
+
+  await runTransaction(db, async (transaction) => {
+    const trackedItemsByProduct = (orderData.items || []).reduce((groups, item) => {
+      if (!item.productId) return groups;
+
+      const productItems = groups.get(item.productId) || [];
+      productItems.push(item);
+      groups.set(item.productId, productItems);
+
+      return groups;
+    }, new Map());
+
+    const productUpdates = [];
+
+    for (const [productId, items] of trackedItemsByProduct.entries()) {
+      const productRef = doc(db, "products", productId);
+      const productSnap = await transaction.get(productRef);
+
+      if (!productSnap.exists()) continue;
+
+      const product = productSnap.data();
+      const inventory = { ...(product.inventory || {}) };
+      let shouldUpdateInventory = false;
+
+      items.forEach((item) => {
+        const size = item.size || "";
+
+        if (!Object.prototype.hasOwnProperty.call(inventory, size)) {
+          return;
+        }
+
+        const requestedQuantity = Math.max(0, Number(item.quantity || 0));
+        const availableQuantity = Math.max(0, Number(inventory[size] || 0));
+
+        if (requestedQuantity > availableQuantity) {
+          throw new Error(
+            `Only ${availableQuantity} ${item.name}${size ? ` in size ${size}` : ""} available.`,
+          );
+        }
+
+        inventory[size] = availableQuantity - requestedQuantity;
+        shouldUpdateInventory = true;
+      });
+
+      if (shouldUpdateInventory) {
+        productUpdates.push({ productRef, inventory });
+      }
+    }
+
+    productUpdates.forEach(({ productRef, inventory }) => {
+      transaction.update(productRef, {
+        inventory,
+        updatedAt: serverTimestamp(),
+      });
+    });
+
+    transaction.set(orderRef, {
+      ...orderData,
+      status: "pending",
+      paymentConfirmed: false,
+      createdAt: serverTimestamp(),
+    });
   });
 
-  return docRef.id;
+  return orderRef.id;
 }
 
 export async function fetchOrders() {

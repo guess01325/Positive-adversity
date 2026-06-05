@@ -62,7 +62,17 @@ export default function AdminProductsPage() {
     setProductForm((currentForm) => ({
       ...currentForm,
       [name]: type === "checkbox" ? checked : value,
-      ...(name === "category" ? { sizes: [] } : {}),
+      ...(name === "category" ? { sizes: [], inventory: {} } : {}),
+    }));
+  }
+
+  function handleInventoryChange(size, value) {
+    setProductForm((currentForm) => ({
+      ...currentForm,
+      inventory: {
+        ...(currentForm.inventory || {}),
+        [size]: value,
+      },
     }));
   }
 
@@ -71,12 +81,21 @@ export default function AdminProductsPage() {
       const currentSizes = Array.isArray(currentForm.sizes)
         ? currentForm.sizes
         : [];
+      const selected = currentSizes.includes(size);
+      const nextInventory = { ...(currentForm.inventory || {}) };
+
+      if (selected) {
+        delete nextInventory[size];
+      } else if (nextInventory[size] === undefined) {
+        nextInventory[size] = 0;
+      }
 
       return {
         ...currentForm,
-        sizes: currentSizes.includes(size)
+        sizes: selected
           ? currentSizes.filter((currentSize) => currentSize !== size)
           : [...currentSizes, size],
+        inventory: nextInventory,
       };
     });
   }
@@ -281,6 +300,33 @@ export default function AdminProductsPage() {
                 )}
               </div>
             </div>
+
+            {productForm.sizes.length > 0 ? (
+              <div className="text-sm font-semibold text-slate-700">
+                Size Inventory
+                <div className="mt-1 grid gap-2 rounded-xl border border-slate-300 p-2 sm:grid-cols-2">
+                  {productForm.sizes.map((size) => (
+                    <label
+                      key={size}
+                      className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2"
+                    >
+                      <span>{size}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={productForm.inventory?.[size] ?? 0}
+                        onChange={(event) =>
+                          handleInventoryChange(size, event.target.value)
+                        }
+                        className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-right text-sm font-normal"
+                        aria-label={`${size} quantity`}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <label className="block text-sm font-semibold text-slate-700">
@@ -418,7 +464,13 @@ export default function AdminProductsPage() {
                     </p>
                     {product.sizes?.length ? (
                       <p className="mt-1 text-sm text-slate-500">
-                        Sizes: {product.sizes.join(", ")}
+                        Sizes:{" "}
+                        {product.sizes
+                          .map(
+                            (size) =>
+                              `${size} (${Number(product.inventory?.[size] ?? 0)})`,
+                          )
+                          .join(", ")}
                       </p>
                     ) : null}
                     <p className="mt-2 text-sm text-slate-700">
