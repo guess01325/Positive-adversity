@@ -257,6 +257,19 @@ export async function fetchEvents({ includeInactive = false } = {}) {
 
   return events
     .sort((a, b) => {
+      const eventTimeA = Date.parse(`${a.eventDate || ''}T12:00:00`);
+      const eventTimeB = Date.parse(`${b.eventDate || ''}T12:00:00`);
+      const hasEventDateA = !Number.isNaN(eventTimeA);
+      const hasEventDateB = !Number.isNaN(eventTimeB);
+
+      if (hasEventDateA && hasEventDateB && eventTimeA !== eventTimeB) {
+        return eventTimeA - eventTimeB;
+      }
+
+      if (hasEventDateA !== hasEventDateB) {
+        return hasEventDateA ? -1 : 1;
+      }
+
       const createdA =
         a.createdAt?.seconds != null
           ? a.createdAt.seconds * 1000 +
