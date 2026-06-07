@@ -103,14 +103,56 @@ function buildGroupedEntryRows(entries) {
     return getEntryDateValue(a).localeCompare(getEntryDateValue(b));
   });
 
+  const rows = [];
   let currentStudent = "";
+  let studentTotals = { hours: 0, internalTotal: 0 };
 
-  return sortedEntries.flatMap((entry) => {
+  const addStudentTotalRow = () => {
+    if (!currentStudent) return;
+
+    rows.push([
+      {
+        content: "Student Total",
+        colSpan: 4,
+        styles: {
+          fillColor: [241, 245, 249],
+          fontStyle: "bold",
+          halign: "right",
+          textColor: [15, 23, 42],
+        },
+      },
+      {
+        content: studentTotals.hours.toFixed(2),
+        styles: {
+          fillColor: [241, 245, 249],
+          fontStyle: "bold",
+          textColor: [15, 23, 42],
+        },
+      },
+      {
+        content: "",
+        styles: {
+          fillColor: [241, 245, 249],
+        },
+      },
+      {
+        content: formatCurrency(studentTotals.internalTotal),
+        styles: {
+          fillColor: [241, 245, 249],
+          fontStyle: "bold",
+          textColor: [15, 23, 42],
+        },
+      },
+    ]);
+  };
+
+  sortedEntries.forEach((entry) => {
     const student = getStudentLabel(entry);
-    const rows = [];
 
     if (student !== currentStudent) {
+      addStudentTotalRow();
       currentStudent = student;
+      studentTotals = { hours: 0, internalTotal: 0 };
       rows.push([
         {
           content: `Student: ${student}`,
@@ -124,14 +166,19 @@ function buildGroupedEntryRows(entries) {
       ]);
     }
 
+    const hours = Number(entry?.hours || 0);
+    const internalTotal = getInternalTotal(entry);
+    studentTotals.hours += hours;
+    studentTotals.internalTotal += internalTotal;
+
     rows.push([
       student,
       entry?.serviceType || "-",
       entry?.date || formatDate(entry?.startTime),
       `${formatTime(entry?.startTime)} - ${formatTime(entry?.endTime)}`,
-      Number(entry?.hours || 0).toFixed(2),
+      hours.toFixed(2),
       formatCurrency(entry?.internalRate || 0),
-      formatCurrency(getInternalTotal(entry)),
+      formatCurrency(internalTotal),
     ]);
 
     rows.push([
@@ -144,9 +191,11 @@ function buildGroupedEntryRows(entries) {
         },
       },
     ]);
-
-    return rows;
   });
+
+  addStudentTotalRow();
+
+  return rows;
 }
 
 export async function exportEntriesPdf({

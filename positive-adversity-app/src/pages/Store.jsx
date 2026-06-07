@@ -45,7 +45,7 @@ const paymentMethods = [
   {
     value: "paypal",
     label: "PayPal",
-    paymentUrl: "https://paypal.me/allanc03",
+    paymentUrl: "https://paypal.me/AVCstoreCT",
   },
 ];
 
