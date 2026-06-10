@@ -28,8 +28,11 @@ const initialCheckoutForm = {
   state: "",
   zip: "",
   paymentOption: "",
+  paymentCompleted: false,
   paymentReferenceId: "",
 };
+
+const checkoutDraftStorageKey = "positiveAdversityStoreCheckoutDraft";
 
 const paymentMethods = [
   {
@@ -56,6 +59,8 @@ export default function Store() {
   const [selectedSizes, setSelectedSizes] = useState({});
   const [cartItems, setCartItems] = useState([]);
   const [checkoutForm, setCheckoutForm] = useState(initialCheckoutForm);
+  const [paymentStarted, setPaymentStarted] = useState(false);
+  const [checkoutDraftLoaded, setCheckoutDraftLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -81,6 +86,43 @@ export default function Store() {
       isCancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    try {
+      const savedDraft = window.localStorage.getItem(checkoutDraftStorageKey);
+
+      if (!savedDraft) {
+        setCheckoutDraftLoaded(true);
+        return;
+      }
+
+      const draft = JSON.parse(savedDraft);
+
+      if (Array.isArray(draft.cartItems)) {
+        setCartItems(draft.cartItems);
+      }
+
+      if (draft.checkoutForm && typeof draft.checkoutForm === "object") {
+        setCheckoutForm({
+          ...initialCheckoutForm,
+          ...draft.checkoutForm,
+          paymentCompleted: Boolean(draft.checkoutForm.paymentCompleted),
+        });
+      }
+
+      setPaymentStarted(Boolean(draft.paymentStarted));
+    } catch (draftError) {
+      console.error("Failed to load checkout draft:", draftError);
+    } finally {
+      setCheckoutDraftLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!checkoutDraftLoaded) return;
+
+    saveCheckoutDraft();
+  }, [cartItems, checkoutForm, paymentStarted, checkoutDraftLoaded]);
 
   const categories = useMemo(
     () => ["All", ...new Set(products.map((product) => product.category))],
@@ -136,6 +178,90 @@ export default function Store() {
     () => cartItems.reduce((total, item) => total + item.quantity, 0),
     [cartItems],
   );
+
+  const selectedPaymentMethod = useMemo(
+    () =>
+      paymentMethods.find(
+        (method) => method.value === checkoutForm.paymentOption,
+      ),
+    [checkoutForm.paymentOption],
+  );
+
+  const hasRequiredCheckoutFields = useMemo(
+    () =>
+      [
+        checkoutForm.fullName,
+        checkoutForm.email,
+        checkoutForm.phone,
+        checkoutForm.streetAddress,
+        checkoutForm.city,
+        checkoutForm.state,
+        checkoutForm.zip,
+      ].every((value) => value.trim().length > 0),
+    [
+      checkoutForm.city,
+      checkoutForm.email,
+      checkoutForm.fullName,
+      checkoutForm.phone,
+      checkoutForm.state,
+      checkoutForm.streetAddress,
+      checkoutForm.zip,
+    ],
+  );
+
+  const canContinueToPayment =
+    cartItems.length > 0 && hasRequiredCheckoutFields && selectedPaymentMethod;
+
+  const canSubmitOrder =
+    cartItems.length > 0 &&
+    hasRequiredCheckoutFields &&
+    selectedPaymentMethod &&
+    checkoutForm.paymentCompleted &&
+    checkoutForm.paymentReferenceId.trim().length > 0;
+
+  function isCheckoutDraftEmpty(
+    draftCartItems = cartItems,
+    draftCheckoutForm = checkoutForm,
+    draftPaymentStarted = paymentStarted,
+  ) {
+    return (
+      draftCartItems.length === 0 &&
+      !draftPaymentStarted &&
+      Object.entries(initialCheckoutForm).every(
+        ([key, value]) => draftCheckoutForm[key] === value,
+      )
+    );
+  }
+
+  function saveCheckoutDraft(
+    draftCartItems = cartItems,
+    draftCheckoutForm = checkoutForm,
+    draftPaymentStarted = paymentStarted,
+  ) {
+    try {
+      if (
+        isCheckoutDraftEmpty(
+          draftCartItems,
+          draftCheckoutForm,
+          draftPaymentStarted,
+        )
+      ) {
+        window.localStorage.removeItem(checkoutDraftStorageKey);
+        return;
+      }
+
+      window.localStorage.setItem(
+        checkoutDraftStorageKey,
+        JSON.stringify({
+          cartItems: draftCartItems,
+          checkoutForm: draftCheckoutForm,
+          paymentStarted: draftPaymentStarted,
+        }),
+      );
+    } catch (draftError) {
+      console.error("Failed to save checkout draft:", draftError);
+    }
+  }
 
   function getProductKey(product) {
     return product.id || product.name;
@@ -303,12 +429,55 @@ export default function Store() {
   }
 
   function handleCheckoutChange(event) {
-    const { name, value } = event.target;
+    const { checked, name, type, value } = event.target;
 
     setCheckoutForm((currentForm) => ({
       ...currentForm,
-      [name]: value,
+      [name]: type === "checkbox" ? checked : value,
+      ...(name === "paymentOption"
+        ? {
+            paymentCompleted: false,
+            paymentReferenceId: "",
+          }
+        : {}),
     }));
+
+    if (name === "paymentOption") {
+      setPaymentStarted(false);
+    }
+  }
+
+  function handlePaymentContinue() {
+    setMessage("");
+    setError("");
+
+    if (!selectedPaymentMethod) {
+      setError("Select a payment method before continuing.");
+      return;
+    }
+
+    if (cartItems.length === 0) {
+      setError("Add at least one item to your cart before continuing.");
+      return;
+    }
+
+    if (!hasRequiredCheckoutFields) {
+      setError("Fill out the required contact and shipping fields first.");
+      return;
+    }
+
+    saveCheckoutDraft(cartItems, checkoutForm, true);
+    setPaymentStarted(true);
+
+    const paymentWindow = window.open(
+      selectedPaymentMethod.paymentUrl,
+      "_blank",
+      "noopener,noreferrer",
+    );
+
+    if (paymentWindow) {
+      paymentWindow.opener = null;
+    }
   }
 
   async function handleSubmitOrder(event) {
@@ -318,6 +487,11 @@ export default function Store() {
 
     if (cartItems.length === 0) {
       setError("Add at least one item to your cart before submitting.");
+      return;
+    }
+
+    if (!canSubmitOrder) {
+      setError("Complete payment and enter your payment username or confirmation ID before submitting.");
       return;
     }
 
@@ -374,8 +548,10 @@ export default function Store() {
         total: cartTotal,
       });
 
+      window.localStorage.removeItem(checkoutDraftStorageKey);
       setCheckoutForm(initialCheckoutForm);
       setCartItems([]);
+      setPaymentStarted(false);
       setMessage(`Order submitted. Order ID: ${orderId}`);
     } catch (orderError) {
       console.error("Failed to submit order:", orderError);
@@ -790,20 +966,6 @@ export default function Store() {
               <p className="text-3xl font-black">${cartTotal}</p>
             </div>
 
-            <div className="mt-4 grid gap-2">
-              {paymentMethods.map((method) => (
-                <a
-                  key={method.value}
-                  href={method.paymentUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full rounded-full bg-slate-950 px-4 py-3 text-center text-sm font-black text-white hover:bg-slate-800"
-                >
-                  Pay with {method.label}
-                </a>
-              ))}
-            </div>
-
             <form className="mt-5 space-y-4" onSubmit={handleSubmitOrder}>
               <div>
                 <label>Full Name</label>
@@ -921,16 +1083,43 @@ export default function Store() {
                 </select>
               </div>
 
-              <div>
-                <label>Your Payment Username or Confirmation ID</label>
-                <input
-                  type="text"
-                  name="paymentReferenceId"
-                  value={checkoutForm.paymentReferenceId}
-                  onChange={handleCheckoutChange}
-                  placeholder="Example: @yourvenmo, $yourcashapp, PayPal email, or transaction ID"
-                />
-              </div>
+              {selectedPaymentMethod ? (
+                <button
+                  type="button"
+                  onClick={handlePaymentContinue}
+                  disabled={!canContinueToPayment}
+                  className="w-full rounded-full bg-slate-950 px-4 py-3 font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Continue to {selectedPaymentMethod.label}
+                </button>
+              ) : null}
+
+              {paymentStarted ? (
+                <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <label className="flex items-start gap-3 text-sm font-black text-slate-800">
+                    <input
+                      type="checkbox"
+                      name="paymentCompleted"
+                      checked={checkoutForm.paymentCompleted}
+                      onChange={handleCheckoutChange}
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-950"
+                    />
+                    <span>I have completed payment</span>
+                  </label>
+
+                  <div>
+                    <label>Payment username or confirmation ID</label>
+                    <input
+                      type="text"
+                      name="paymentReferenceId"
+                      value={checkoutForm.paymentReferenceId}
+                      onChange={handleCheckoutChange}
+                      placeholder="Example: @yourvenmo, $yourcashapp, PayPal email, or transaction ID"
+                      required
+                    />
+                  </div>
+                </div>
+              ) : null}
 
               {error ? (
                 <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
@@ -946,7 +1135,7 @@ export default function Store() {
 
               <button
                 type="submit"
-                disabled={submitting || cartItems.length === 0}
+                disabled={submitting || !canSubmitOrder}
                 className="w-full rounded-full bg-slate-950 px-4 py-3 font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting ? "Submitting..." : "Submit Order"}
