@@ -17,6 +17,16 @@ import { cloudFunctions, db } from './firebase';
 
 export const PROTECTED_ADMIN_EMAIL = 'guess01325@gmail.com';
 
+function logCallableError(step, error, extra = {}) {
+  console.error(`[store checkout] ${step} failed`, {
+    code: error?.code,
+    message: error?.message,
+    details: error?.details,
+    name: error?.name,
+    ...extra,
+  });
+}
+
 function normalizeEmail(email) {
   return (email || '').trim().toLowerCase();
 }
@@ -640,27 +650,61 @@ export async function updateUserDisplayName(uid, displayName) {
 }
 
 export async function createOrder(orderData) {
-  const submitStoreOrder = httpsCallable(cloudFunctions, "submitStoreOrder");
-  const result = await submitStoreOrder(orderData);
+  console.info("[store checkout] submitStoreOrder:start", {
+    itemCount: Array.isArray(orderData?.items) ? orderData.items.length : 0,
+    paymentOption: orderData?.payment?.option || "",
+  });
 
-  return result.data.orderId;
+  const submitStoreOrder = httpsCallable(cloudFunctions, "submitStoreOrder");
+
+  try {
+    const result = await submitStoreOrder(orderData);
+    const orderId = result.data?.orderId;
+
+    console.info("[store checkout] submitStoreOrder:success", {
+      orderId,
+      total: result.data?.total,
+    });
+
+    return orderId;
+  } catch (error) {
+    logCallableError("submitStoreOrder", error);
+    throw error;
+  }
 }
 
 export async function createStripeCheckoutSession(orderId, cartDetails = {}) {
+  console.info("[store checkout] createCheckoutSession:start", {
+    orderId,
+    itemCount: Array.isArray(cartDetails?.items) ? cartDetails.items.length : 0,
+  });
+
   const createCheckoutSession = httpsCallable(
     cloudFunctions,
     "createCheckoutSession",
   );
-  const result = await createCheckoutSession({
-    orderId,
-    ...cartDetails,
-  });
 
-  if (!result.data?.url) {
-    throw new Error("Stripe checkout did not return a redirect URL.");
+  try {
+    const result = await createCheckoutSession({
+      orderId,
+      ...cartDetails,
+    });
+
+    if (!result.data?.url) {
+      throw new Error("Stripe checkout did not return a redirect URL.");
+    }
+
+    console.info("[store checkout] createCheckoutSession:success", {
+      orderId,
+      sessionId: result.data?.sessionId,
+      hasUrl: Boolean(result.data?.url),
+    });
+
+    return result.data;
+  } catch (error) {
+    logCallableError("createCheckoutSession", error, { orderId });
+    throw error;
   }
-
-  return result.data;
 }
 
 export async function fetchOrder(orderId) {

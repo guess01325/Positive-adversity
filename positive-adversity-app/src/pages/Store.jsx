@@ -496,6 +496,24 @@ export default function Store() {
     }
   }
 
+  function getCheckoutErrorMessage(error, step, orderId = "") {
+    if (error?.code === "deadline-exceeded") {
+      return step === "createCheckoutSession"
+        ? `The order was created${orderId ? ` (${orderId})` : ""}, but secure checkout took too long to open. Please try again or contact us with your order ID.`
+        : "The order request took too long. Please check your connection and try again.";
+    }
+
+    if (error?.code === "failed-precondition" || error?.code === "invalid-argument") {
+      return error.message || "Please review your checkout details and try again.";
+    }
+
+    if (step === "createCheckoutSession") {
+      return `The order was created${orderId ? ` (${orderId})` : ""}, but secure checkout could not open. Please try again or contact us with your order ID.`;
+    }
+
+    return error?.message || "Failed to submit order.";
+  }
+
   async function handleSubmitOrder(event) {
     event.preventDefault();
     setMessage("");
@@ -544,10 +562,18 @@ export default function Store() {
       return;
     }
 
+    let submitStep = "submitStoreOrder";
+    let createdOrderId = "";
+
     try {
       setSubmitting(true);
+      console.info("[store checkout] submit:start", {
+        paymentOption: checkoutForm.paymentOption,
+        itemCount: cartItems.length,
+        isStripeCheckout,
+      });
 
-      const orderId = await createOrder({
+      createdOrderId = await createOrder({
         customer: {
           fullName: checkoutForm.fullName.trim(),
           email: checkoutForm.email.trim().toLowerCase(),
@@ -569,10 +595,16 @@ export default function Store() {
       });
 
       if (checkoutForm.paymentOption === "stripe") {
+        submitStep = "createCheckoutSession";
         setMessage("Redirecting to secure Stripe checkout...");
-        const checkoutSession = await createStripeCheckoutSession(orderId, {
+        const checkoutSession = await createStripeCheckoutSession(createdOrderId, {
           items: cartItems,
           total: cartTotal,
+        });
+        submitStep = "redirect";
+        console.info("[store checkout] redirect:start", {
+          orderId: createdOrderId,
+          hasCheckoutUrl: Boolean(checkoutSession.url),
         });
         window.localStorage.removeItem(checkoutDraftStorageKey);
         window.location.assign(checkoutSession.url);
@@ -583,10 +615,17 @@ export default function Store() {
       setCheckoutForm(initialCheckoutForm);
       setCartItems([]);
       setPaymentStarted(false);
-      setMessage(`Order submitted. Order ID: ${orderId}`);
+      setMessage(`Order submitted. Order ID: ${createdOrderId}`);
     } catch (orderError) {
-      console.error("Failed to submit order:", orderError);
-      setError(orderError?.message || "Failed to submit order.");
+      console.error("[store checkout] submit:failed", {
+        step: submitStep,
+        orderId: createdOrderId,
+        code: orderError?.code,
+        message: orderError?.message,
+        details: orderError?.details,
+        name: orderError?.name,
+      });
+      setError(getCheckoutErrorMessage(orderError, submitStep, createdOrderId));
     } finally {
       setSubmitting(false);
     }

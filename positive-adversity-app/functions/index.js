@@ -119,6 +119,18 @@ function getInventoryQuantity(product, size) {
   return Math.max(0, Number(inventory[size] || 0));
 }
 
+function logFunctionError(step, error, extra = {}) {
+  console.error(`[store checkout] ${step} failed`, {
+    code: error?.code,
+    message: error?.message,
+    type: error?.type,
+    stripeCode: error?.raw?.code,
+    stripeParam: error?.raw?.param,
+    stripeRequestId: error?.requestId || error?.raw?.requestId,
+    ...extra,
+  });
+}
+
 function normalizeCheckout(data) {
   const customer = data.customer || {};
   const shippingAddress = data.shippingAddress || {};
@@ -169,190 +181,242 @@ function normalizeCheckout(data) {
 }
 
 exports.submitStoreOrder = onCall(async (request) => {
-  const checkout = normalizeCheckout(request.data || {});
-  const orderRef = db.collection("orders").doc();
+  let checkout;
+  let orderRef;
 
-  const order = await db.runTransaction(async (transaction) => {
-    const productGroups = checkout.items.reduce((groups, item) => {
-      const key = `${item.productId}::${item.size}`;
-      const existingItem = groups.get(key);
+  try {
+    checkout = normalizeCheckout(request.data || {});
+    orderRef = db.collection("orders").doc();
 
-      if (existingItem) {
-        existingItem.quantity += item.quantity;
-      } else {
-        groups.set(key, { ...item });
-      }
-
-      return groups;
-    }, new Map());
-
-    const orderItems = [];
-    const productUpdates = new Map();
-    let total = 0;
-
-    for (const item of productGroups.values()) {
-      const productRef = db.collection("products").doc(item.productId);
-      const productSnap = await transaction.get(productRef);
-
-      if (!productSnap.exists) {
-        throw new HttpsError("not-found", "One item in your cart is no longer available.");
-      }
-
-      const product = productSnap.data() || {};
-
-      if (product.inStock === false) {
-        throw new HttpsError(
-          "failed-precondition",
-          `${product.name || "This item"} is no longer in stock.`,
-        );
-      }
-
-      const availableQuantity = getInventoryQuantity(product, item.size);
-
-      if (item.quantity > availableQuantity) {
-        throw new HttpsError(
-          "failed-precondition",
-          `Only ${availableQuantity} ${product.name}${item.size ? ` in size ${item.size}` : ""} available.`,
-        );
-      }
-
-      const price = Number(product.price || 0);
-
-      if (!Number.isFinite(price) || price < 0) {
-        throw new HttpsError("failed-precondition", "One item has an invalid price.");
-      }
-
-      const inventory = { ...(productUpdates.get(item.productId)?.inventory || product.inventory || {}) };
-      inventory[item.size] = availableQuantity - item.quantity;
-
-      productUpdates.set(item.productId, {
-        productRef,
-        inventory,
-      });
-
-      total += price * item.quantity;
-      orderItems.push({
-        productId: item.productId,
-        name: cleanString(product.name, 160),
-        size: item.size,
-        quantity: item.quantity,
-        price,
-      });
-    }
-
-    productUpdates.forEach(({ productRef, inventory }) => {
-      transaction.update(productRef, {
-        inventory,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
+    console.log("[store checkout] submitStoreOrder:start", {
+      orderId: orderRef.id,
+      itemCount: checkout.items.length,
+      paymentOption: checkout.payment.option,
     });
 
-    const orderData = {
-      customer: checkout.customer,
-      shippingAddress: checkout.shippingAddress,
-      payment: checkout.payment,
-      paymentMethod: checkout.payment.option,
-      items: orderItems,
-      total,
-      status: getOrderStatusForPayment(checkout.payment.option),
-      paymentConfirmed: false,
-      createdAt: FieldValue.serverTimestamp(),
+    const order = await db.runTransaction(async (transaction) => {
+      const productGroups = checkout.items.reduce((groups, item) => {
+        const key = `${item.productId}::${item.size}`;
+        const existingItem = groups.get(key);
+
+        if (existingItem) {
+          existingItem.quantity += item.quantity;
+        } else {
+          groups.set(key, { ...item });
+        }
+
+        return groups;
+      }, new Map());
+
+      const orderItems = [];
+      const productUpdates = new Map();
+      let total = 0;
+
+      for (const item of productGroups.values()) {
+        const productRef = db.collection("products").doc(item.productId);
+        const productSnap = await transaction.get(productRef);
+
+        if (!productSnap.exists) {
+          throw new HttpsError("not-found", "One item in your cart is no longer available.");
+        }
+
+        const product = productSnap.data() || {};
+
+        if (product.inStock === false) {
+          throw new HttpsError(
+            "failed-precondition",
+            `${product.name || "This item"} is no longer in stock.`,
+          );
+        }
+
+        const availableQuantity = getInventoryQuantity(product, item.size);
+
+        if (item.quantity > availableQuantity) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Only ${availableQuantity} ${product.name}${item.size ? ` in size ${item.size}` : ""} available.`,
+          );
+        }
+
+        const price = Number(product.price || 0);
+
+        if (!Number.isFinite(price) || price < 0) {
+          throw new HttpsError("failed-precondition", "One item has an invalid price.");
+        }
+
+        const inventory = { ...(productUpdates.get(item.productId)?.inventory || product.inventory || {}) };
+        inventory[item.size] = availableQuantity - item.quantity;
+
+        productUpdates.set(item.productId, {
+          productRef,
+          inventory,
+        });
+
+        total += price * item.quantity;
+        orderItems.push({
+          productId: item.productId,
+          name: cleanString(product.name, 160),
+          size: item.size,
+          quantity: item.quantity,
+          price,
+        });
+      }
+
+      productUpdates.forEach(({ productRef, inventory }) => {
+        transaction.update(productRef, {
+          inventory,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      });
+
+      const orderData = {
+        customer: checkout.customer,
+        shippingAddress: checkout.shippingAddress,
+        payment: checkout.payment,
+        paymentMethod: checkout.payment.option,
+        items: orderItems,
+        total,
+        status: getOrderStatusForPayment(checkout.payment.option),
+        paymentConfirmed: false,
+        createdAt: FieldValue.serverTimestamp(),
+      };
+
+      transaction.set(orderRef, orderData);
+
+      return orderData;
+    });
+
+    console.log("[store checkout] submitStoreOrder:success", {
+      orderId: orderRef.id,
+      total: order.total,
+      itemCount: order.items.length,
+      status: order.status,
+    });
+
+    return {
+      orderId: orderRef.id,
+      total: order.total,
     };
+  } catch (error) {
+    logFunctionError("submitStoreOrder", error, {
+      orderId: orderRef?.id || "",
+      paymentOption: checkout?.payment?.option || "",
+    });
 
-    transaction.set(orderRef, orderData);
-
-    return orderData;
-  });
-
-  return {
-    orderId: orderRef.id,
-    total: order.total,
-  };
+    throw error;
+  }
 });
 
 exports.createCheckoutSession = onCall(
   { secrets: [stripeSecretKey] },
   async (request) => {
-    const orderId = requireString(request.data?.orderId, "Order ID", 120);
-    const orderSnap = await db.collection("orders").doc(orderId).get();
+    let orderId = "";
 
-    if (!orderSnap.exists) {
-      throw new HttpsError("not-found", "Order not found.");
-    }
+    try {
+      orderId = requireString(request.data?.orderId, "Order ID", 120);
+      console.log("[store checkout] createCheckoutSession:start", { orderId });
 
-    const order = orderSnap.data() || {};
+      const orderSnap = await db.collection("orders").doc(orderId).get();
 
-    if (order.payment?.option !== "stripe" && order.paymentMethod !== "stripe") {
-      throw new HttpsError(
-        "failed-precondition",
-        "This order was not created for Stripe checkout.",
-      );
-    }
+      if (!orderSnap.exists) {
+        throw new HttpsError("not-found", "Order not found.");
+      }
 
-    if (order.status === "paid" || order.paymentConfirmed === true) {
-      throw new HttpsError("failed-precondition", "This order is already paid.");
-    }
+      const order = orderSnap.data() || {};
 
-    const items = Array.isArray(order.items) ? order.items : [];
-
-    if (items.length === 0) {
-      throw new HttpsError("failed-precondition", "This order has no items.");
-    }
-
-    const lineItems = items.map((item) => {
-      const quantity = parseQuantity(item.quantity);
-      const unitAmount = dollarsToCents(item.price);
-
-      if (unitAmount < 1) {
+      if (order.payment?.option !== "stripe" && order.paymentMethod !== "stripe") {
         throw new HttpsError(
           "failed-precondition",
-          "Stripe checkout requires every item to have a positive price.",
+          "This order was not created for Stripe checkout.",
         );
       }
 
-      return {
-        price_data: {
-          currency: CURRENCY,
-          product_data: {
-            name: cleanString(
-              `${item.name || "Store item"}${item.size ? ` - ${item.size}` : ""}`,
-              200,
-            ),
-          },
-          unit_amount: unitAmount,
-        },
-        quantity,
-      };
-    });
+      if (order.status === "paid" || order.paymentConfirmed === true) {
+        throw new HttpsError("failed-precondition", "This order is already paid.");
+      }
 
-    const baseUrl = getCheckoutSiteUrl();
-    console.log("BASE URL:", JSON.stringify(baseUrl));
-    const stripe = getStripeClient();
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      line_items: lineItems,
-      customer_email: order.customer?.email || undefined,
-      success_url: `${baseUrl}/store/checkout/success?orderId=${encodeURIComponent(orderId)}`,
-      cancel_url: `${baseUrl}/store/checkout/cancel?orderId=${encodeURIComponent(orderId)}`,
-      metadata: {
+      const items = Array.isArray(order.items) ? order.items : [];
+
+      if (items.length === 0) {
+        throw new HttpsError("failed-precondition", "This order has no items.");
+      }
+
+      const lineItems = items.map((item) => {
+        const quantity = parseQuantity(item.quantity);
+        const unitAmount = dollarsToCents(item.price);
+
+        if (unitAmount < 1) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Stripe checkout requires every item to have a positive price.",
+          );
+        }
+
+        return {
+          price_data: {
+            currency: CURRENCY,
+            product_data: {
+              name: cleanString(
+                `${item.name || "Store item"}${item.size ? ` - ${item.size}` : ""}`,
+                200,
+              ),
+            },
+            unit_amount: unitAmount,
+          },
+          quantity,
+        };
+      });
+
+      const baseUrl = getCheckoutSiteUrl();
+      console.log("[store checkout] createCheckoutSession:stripeRequest", {
         orderId,
-      },
-      payment_intent_data: {
+        itemCount: lineItems.length,
+        baseUrl,
+      });
+      const stripe = getStripeClient();
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        line_items: lineItems,
+        customer_email: order.customer?.email || undefined,
+        success_url: `${baseUrl}/store/checkout/success?orderId=${encodeURIComponent(orderId)}`,
+        cancel_url: `${baseUrl}/store/checkout/cancel?orderId=${encodeURIComponent(orderId)}`,
         metadata: {
           orderId,
         },
-      },
-    });
+        payment_intent_data: {
+          metadata: {
+            orderId,
+          },
+        },
+      });
 
-    await orderSnap.ref.update({
-      stripeSessionId: session.id,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+      await orderSnap.ref.update({
+        stripeSessionId: session.id,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
 
-    return {
-      sessionId: session.id,
-      url: session.url,
-    };
+      console.log("[store checkout] createCheckoutSession:success", {
+        orderId,
+        sessionId: session.id,
+        hasUrl: Boolean(session.url),
+      });
+
+      return {
+        sessionId: session.id,
+        url: session.url,
+      };
+    } catch (error) {
+      logFunctionError("createCheckoutSession", error, { orderId });
+
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+
+      throw new HttpsError(
+        "internal",
+        "Secure checkout could not be started. Please try again.",
+      );
+    }
   },
 );
 
