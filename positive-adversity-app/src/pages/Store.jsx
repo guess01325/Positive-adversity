@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import acGoldLogo from "../assets/ac-gold-logo.png";
 import logoFull from "../assets/logo-full.png";
 import { DONATE_URL, TEAM_DONATE_URL } from "../lib/constants";
-import { createOrder, fetchProducts } from "../lib/firestore";
+import {
+  createOrder,
+  createStripeCheckoutSession,
+  fetchProducts,
+} from "../lib/firestore";
 import { getProductStore, storeProducts } from "../lib/products";
 
 const shopTiles = [
@@ -46,6 +50,10 @@ const paymentMethods = [
     value: "paypal",
     label: "PayPal",
     paymentUrl: "https://paypal.me/AVCstoreCT",
+  },
+  {
+    value: "stripe",
+    label: "Card, Apple Pay, or Google Pay",
   },
 ];
 
@@ -373,6 +381,16 @@ export default function Store() {
         items: cartItems,
         total: cartTotal,
       });
+
+      if (checkoutForm.paymentOption === "stripe") {
+        setMessage("Redirecting to secure Stripe checkout...");
+        const checkoutSession = await createStripeCheckoutSession(orderId, {
+          items: cartItems,
+          total: cartTotal,
+        });
+        window.location.assign(checkoutSession.url);
+        return;
+      }
 
       setCheckoutForm(initialCheckoutForm);
       setCartItems([]);
@@ -791,17 +809,19 @@ export default function Store() {
             </div>
 
             <div className="mt-4 grid gap-2">
-              {paymentMethods.map((method) => (
-                <a
-                  key={method.value}
-                  href={method.paymentUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full rounded-full bg-slate-950 px-4 py-3 text-center text-sm font-black text-white hover:bg-slate-800"
-                >
-                  Pay with {method.label}
-                </a>
-              ))}
+              {paymentMethods
+                .filter((method) => method.paymentUrl)
+                .map((method) => (
+                  <a
+                    key={method.value}
+                    href={method.paymentUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full rounded-full bg-slate-950 px-4 py-3 text-center text-sm font-black text-white hover:bg-slate-800"
+                  >
+                    Pay with {method.label}
+                  </a>
+                ))}
             </div>
 
             <form className="mt-5 space-y-4" onSubmit={handleSubmitOrder}>

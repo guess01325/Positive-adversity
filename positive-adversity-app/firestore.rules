@@ -1,0 +1,83 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userEmail() {
+      return request.auth.token.email != null
+        ? request.auth.token.email.lower()
+        : "";
+    }
+
+    function isProtectedAdmin() {
+      return isSignedIn() && userEmail() == "guess01325@gmail.com";
+    }
+
+    function isAllowedUser() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/allowedUsers/$(userEmail())) &&
+        get(/databases/$(database)/documents/allowedUsers/$(userEmail())).data.active == true;
+    }
+
+    function isAdmin() {
+      return isProtectedAdmin() ||
+        (
+          isSignedIn() &&
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          (
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"
+          )
+        );
+    }
+
+    function canUseApp() {
+      return isAdmin() || isAllowedUser();
+    }
+
+    match /allowedUsers/{email} {
+      allow get: if isAdmin() || (isSignedIn() && userEmail() == email);
+      allow list, create, update, delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /entries/{entryId} {
+      allow create: if canUseApp() &&
+        request.resource.data.userId == request.auth.uid;
+      allow read: if canUseApp() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow update, delete: if canUseApp() &&
+        (isAdmin() || resource.data.userId == request.auth.uid);
+    }
+
+    match /invoiceAdjustments/{adjustmentId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    match /events/{eventId} {
+      allow get, list: if resource.data.active == true || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /products/{productId} {
+      allow get, list: if resource.data.inStock == true || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow get: if true;
+      allow list, update, delete: if isAdmin();
+      allow create: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -6,14 +6,14 @@ import {
   getDoc,
   getDocs,
   query,
-  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { httpsCallable } from "firebase/functions";
+import { cloudFunctions, db } from './firebase';
 
 export const PROTECTED_ADMIN_EMAIL = 'guess01325@gmail.com';
 
@@ -640,72 +640,44 @@ export async function updateUserDisplayName(uid, displayName) {
 }
 
 export async function createOrder(orderData) {
-  const orderRef = doc(collection(db, "orders"));
+  const submitStoreOrder = httpsCallable(cloudFunctions, "submitStoreOrder");
+  const result = await submitStoreOrder(orderData);
 
-  await runTransaction(db, async (transaction) => {
-    const trackedItemsByProduct = (orderData.items || []).reduce((groups, item) => {
-      if (!item.productId) return groups;
+  return result.data.orderId;
+}
 
-      const productItems = groups.get(item.productId) || [];
-      productItems.push(item);
-      groups.set(item.productId, productItems);
-
-      return groups;
-    }, new Map());
-
-    const productUpdates = [];
-
-    for (const [productId, items] of trackedItemsByProduct.entries()) {
-      const productRef = doc(db, "products", productId);
-      const productSnap = await transaction.get(productRef);
-
-      if (!productSnap.exists()) continue;
-
-      const product = productSnap.data();
-      const inventory = { ...(product.inventory || {}) };
-      let shouldUpdateInventory = false;
-
-      items.forEach((item) => {
-        const size = item.size || "";
-
-        if (!Object.prototype.hasOwnProperty.call(inventory, size)) {
-          return;
-        }
-
-        const requestedQuantity = Math.max(0, Number(item.quantity || 0));
-        const availableQuantity = Math.max(0, Number(inventory[size] || 0));
-
-        if (requestedQuantity > availableQuantity) {
-          throw new Error(
-            `Only ${availableQuantity} ${item.name}${size ? ` in size ${size}` : ""} available.`,
-          );
-        }
-
-        inventory[size] = availableQuantity - requestedQuantity;
-        shouldUpdateInventory = true;
-      });
-
-      if (shouldUpdateInventory) {
-        productUpdates.push({ productRef, inventory });
-      }
-    }
-
-    productUpdates.forEach(({ productRef, inventory }) => {
-      transaction.update(productRef, {
-        inventory,
-        updatedAt: serverTimestamp(),
-      });
-    });
-
-    transaction.set(orderRef, {
-      ...orderData,
-      status: "pending",
-      paymentConfirmed: false,
-      createdAt: serverTimestamp(),
-    });
+export async function createStripeCheckoutSession(orderId, cartDetails = {}) {
+  const createCheckoutSession = httpsCallable(
+    cloudFunctions,
+    "createCheckoutSession",
+  );
+  const result = await createCheckoutSession({
+    orderId,
+    ...cartDetails,
   });
 
-  return orderRef.id;
+  if (!result.data?.url) {
+    throw new Error("Stripe checkout did not return a redirect URL.");
+  }
+
+  return result.data;
+}
+
+export async function fetchOrder(orderId) {
+  if (!orderId) {
+    throw new Error("Missing order id.");
+  }
+
+  const snapshot = await getDoc(doc(db, "orders", orderId));
+
+  if (!snapshot.exists()) {
+    return null;
+  }
+
+  return {
+    id: snapshot.id,
+    ...snapshot.data(),
+  };
 }
 
 export async function fetchOrders() {

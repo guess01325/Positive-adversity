@@ -6,6 +6,7 @@ import { initializeApp } from "firebase/app";
 } from "firebase/auth";
 import { Capacitor } from "@capacitor/core";
 import { getFirestore } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -35,3 +36,4 @@ try {
 export { auth };
 
 export const db = getFirestore(app);
+export const cloudFunctions = getFunctions(app);
