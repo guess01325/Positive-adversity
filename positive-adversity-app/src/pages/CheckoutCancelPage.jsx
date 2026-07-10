@@ -53,12 +53,21 @@ export default function CheckoutCancelPage() {
               : "No saved cart was found on this device. If you used another browser or device, return there to continue checkout."}
           </p>
 
-          <Link
-            to="/store"
-            className="inline-flex w-full justify-center rounded-full bg-slate-950 px-5 py-3 text-sm font-black text-white hover:bg-slate-800 sm:w-auto"
-          >
-            {hasSavedCart ? "Return to Cart" : "Return to Store"}
-          </Link>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link
+              to="/store"
+              className="inline-flex justify-center rounded-full bg-slate-950 px-5 py-3 text-sm font-black text-white hover:bg-slate-800"
+            >
+              {hasSavedCart ? "Return to Cart" : "Return to Store"}
+            </Link>
+
+            <Link
+              to={`/store/order-lookup${orderId ? `?orderId=${encodeURIComponent(orderId)}` : ""}`}
+              className="inline-flex justify-center rounded-full border border-slate-300 px-5 py-3 text-sm font-black text-slate-950 hover:bg-slate-50"
+            >
+              Look Up Order
+            </Link>
+          </div>
         </div>
       </div>
     </section>

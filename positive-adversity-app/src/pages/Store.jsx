@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import acGoldLogo from "../assets/ac-gold-logo.png";
 import logoFull from "../assets/logo-full.png";
 import { DONATE_URL, TEAM_DONATE_URL } from "../lib/constants";
@@ -1009,6 +1010,12 @@ export default function Store() {
                 {cartCount}
               </span>
             </div>
+            <Link
+              to="/store/order-lookup"
+              className="mt-4 inline-flex text-sm font-black text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-950"
+            >
+              Look up an order
+            </Link>
           </div>
 
           <div className="mt-4 space-y-3">
