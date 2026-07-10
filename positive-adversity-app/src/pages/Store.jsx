@@ -8,6 +8,13 @@ import {
   fetchProducts,
 } from "../lib/firestore";
 import { getProductStore, storeProducts } from "../lib/products";
+import {
+  clearStoreCheckoutDraft,
+  createCheckoutAttemptId,
+  getCartFingerprint,
+  loadStoreCheckoutDraft,
+  saveStoreCheckoutDraft,
+} from "../lib/storeCheckoutDraft";
 
 const shopTiles = [
   {
@@ -35,8 +42,6 @@ const initialCheckoutForm = {
   paymentCompleted: false,
   paymentReferenceId: "",
 };
-
-const checkoutDraftStorageKey = "positiveAdversityStoreCheckoutDraft";
 
 const paymentMethods = [
   {
@@ -68,6 +73,9 @@ export default function Store() {
   const [cartItems, setCartItems] = useState([]);
   const [checkoutForm, setCheckoutForm] = useState(initialCheckoutForm);
   const [paymentStarted, setPaymentStarted] = useState(false);
+  const [pendingStripeOrderId, setPendingStripeOrderId] = useState("");
+  const [checkoutAttemptId, setCheckoutAttemptId] = useState("");
+  const [pendingCartFingerprint, setPendingCartFingerprint] = useState("");
   const [checkoutDraftLoaded, setCheckoutDraftLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
@@ -97,17 +105,19 @@ export default function Store() {
 
   useEffect(() => {
     try {
-      const savedDraft = window.localStorage.getItem(checkoutDraftStorageKey);
+      const draft = loadStoreCheckoutDraft();
 
-      if (!savedDraft) {
+      if (!draft) {
         setCheckoutDraftLoaded(true);
         return;
       }
 
-      const draft = JSON.parse(savedDraft);
-
       if (Array.isArray(draft.cartItems)) {
         setCartItems(draft.cartItems);
+      }
+
+      if (draft.selectedSizes && typeof draft.selectedSizes === "object") {
+        setSelectedSizes(draft.selectedSizes);
       }
 
       if (draft.checkoutForm && typeof draft.checkoutForm === "object") {
@@ -119,6 +129,9 @@ export default function Store() {
       }
 
       setPaymentStarted(Boolean(draft.paymentStarted));
+      setPendingStripeOrderId(draft.pendingStripeOrderId || "");
+      setCheckoutAttemptId(draft.checkoutAttemptId || "");
+      setPendingCartFingerprint(draft.cartFingerprint || "");
     } catch (draftError) {
       console.error("Failed to load checkout draft:", draftError);
     } finally {
@@ -130,7 +143,16 @@ export default function Store() {
     if (!checkoutDraftLoaded) return;
 
     saveCheckoutDraft();
-  }, [cartItems, checkoutForm, paymentStarted, checkoutDraftLoaded]);
+  }, [
+    cartItems,
+    checkoutForm,
+    paymentStarted,
+    pendingStripeOrderId,
+    checkoutAttemptId,
+    pendingCartFingerprint,
+    selectedSizes,
+    checkoutDraftLoaded,
+  ]);
 
   const categories = useMemo(
     () => ["All", ...new Set(products.map((product) => product.category))],
@@ -230,48 +252,33 @@ export default function Store() {
       (checkoutForm.paymentCompleted &&
         checkoutForm.paymentReferenceId.trim().length > 0));
 
-  function isCheckoutDraftEmpty(
-    draftCartItems = cartItems,
-    draftCheckoutForm = checkoutForm,
-    draftPaymentStarted = paymentStarted,
-  ) {
-    return (
-      draftCartItems.length === 0 &&
-      !draftPaymentStarted &&
-      Object.entries(initialCheckoutForm).every(
-        ([key, value]) => draftCheckoutForm[key] === value,
-      )
-    );
-  }
-
   function saveCheckoutDraft(
     draftCartItems = cartItems,
     draftCheckoutForm = checkoutForm,
     draftPaymentStarted = paymentStarted,
+    draftPendingStripeOrderId = pendingStripeOrderId,
+    draftCheckoutAttemptId = checkoutAttemptId,
+    draftCartFingerprint = pendingCartFingerprint,
   ) {
     try {
-      if (
-        isCheckoutDraftEmpty(
-          draftCartItems,
-          draftCheckoutForm,
-          draftPaymentStarted,
-        )
-      ) {
-        window.localStorage.removeItem(checkoutDraftStorageKey);
-        return;
-      }
-
-      window.localStorage.setItem(
-        checkoutDraftStorageKey,
-        JSON.stringify({
-          cartItems: draftCartItems,
-          checkoutForm: draftCheckoutForm,
-          paymentStarted: draftPaymentStarted,
-        }),
-      );
+      saveStoreCheckoutDraft({
+        cartItems: draftCartItems,
+        checkoutForm: draftCheckoutForm,
+        paymentStarted: draftPaymentStarted,
+        pendingStripeOrderId: draftPendingStripeOrderId,
+        checkoutAttemptId: draftCheckoutAttemptId,
+        cartFingerprint: draftCartFingerprint || getCartFingerprint(draftCartItems),
+        selectedSizes,
+      });
     } catch (draftError) {
       console.error("Failed to save checkout draft:", draftError);
     }
+  }
+
+  function clearPendingStripeAttempt() {
+    setPendingStripeOrderId("");
+    setCheckoutAttemptId("");
+    setPendingCartFingerprint("");
   }
 
   function getProductKey(product) {
@@ -340,6 +347,7 @@ export default function Store() {
   function handleAddToCart(product) {
     setMessage("");
     setError("");
+    clearPendingStripeAttempt();
 
     const size = getSelectedSize(product);
     const sizes = getProductSizes(product);
@@ -406,6 +414,7 @@ export default function Store() {
 
   function handleUpdateQuantity(itemName, itemSize, change) {
     setError("");
+    clearPendingStripeAttempt();
 
     setCartItems((currentItems) => {
       const cartItem = currentItems.find(
@@ -455,6 +464,7 @@ export default function Store() {
 
     if (name === "paymentOption") {
       setPaymentStarted(false);
+      clearPendingStripeAttempt();
     }
   }
 
@@ -567,13 +577,27 @@ export default function Store() {
 
     try {
       setSubmitting(true);
+      const currentCartFingerprint = getCartFingerprint(cartItems);
+      const canReusePendingStripeOrder =
+        isStripeCheckout &&
+        pendingStripeOrderId &&
+        checkoutAttemptId &&
+        pendingCartFingerprint === currentCartFingerprint;
+      const nextCheckoutAttemptId =
+        canReusePendingStripeOrder && checkoutAttemptId
+          ? checkoutAttemptId
+          : createCheckoutAttemptId();
+
       console.info("[store checkout] submit:start", {
         paymentOption: checkoutForm.paymentOption,
         itemCount: cartItems.length,
         isStripeCheckout,
+        canReusePendingStripeOrder: Boolean(canReusePendingStripeOrder),
       });
 
       createdOrderId = await createOrder({
+        pendingOrderId: canReusePendingStripeOrder ? pendingStripeOrderId : "",
+        checkoutAttemptId: isStripeCheckout ? nextCheckoutAttemptId : "",
         customer: {
           fullName: checkoutForm.fullName.trim(),
           email: checkoutForm.email.trim().toLowerCase(),
@@ -595,6 +619,17 @@ export default function Store() {
       });
 
       if (checkoutForm.paymentOption === "stripe") {
+        setPendingStripeOrderId(createdOrderId);
+        setCheckoutAttemptId(nextCheckoutAttemptId);
+        setPendingCartFingerprint(currentCartFingerprint);
+        saveCheckoutDraft(
+          cartItems,
+          checkoutForm,
+          paymentStarted,
+          createdOrderId,
+          nextCheckoutAttemptId,
+          currentCartFingerprint,
+        );
         submitStep = "createCheckoutSession";
         setMessage("Redirecting to secure Stripe checkout...");
         const checkoutSession = await createStripeCheckoutSession(createdOrderId, {
@@ -606,15 +641,15 @@ export default function Store() {
           orderId: createdOrderId,
           hasCheckoutUrl: Boolean(checkoutSession.url),
         });
-        window.localStorage.removeItem(checkoutDraftStorageKey);
         window.location.assign(checkoutSession.url);
         return;
       }
 
-      window.localStorage.removeItem(checkoutDraftStorageKey);
+      clearStoreCheckoutDraft();
       setCheckoutForm(initialCheckoutForm);
       setCartItems([]);
       setPaymentStarted(false);
+      clearPendingStripeAttempt();
       setMessage(`Order submitted. Order ID: ${createdOrderId}`);
     } catch (orderError) {
       console.error("[store checkout] submit:failed", {
@@ -625,6 +660,10 @@ export default function Store() {
         details: orderError?.details,
         name: orderError?.name,
       });
+      if (isStripeCheckout && submitStep === "submitStoreOrder") {
+        clearPendingStripeAttempt();
+        saveCheckoutDraft(cartItems, checkoutForm, paymentStarted, "", "", "");
+      }
       setError(getCheckoutErrorMessage(orderError, submitStep, createdOrderId));
     } finally {
       setSubmitting(false);

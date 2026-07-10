@@ -8,7 +8,16 @@ import {
 import { storeProducts } from "../lib/products";
 import { formatCurrency } from "../lib/utils";
 
-const orderStatuses = ["pending", "processing", "shipped", "completed", "cancelled"];
+const orderStatuses = [
+  "pending",
+  "pending_payment",
+  "paid",
+  "paid_inventory_review",
+  "processing",
+  "shipped",
+  "completed",
+  "cancelled",
+];
 
 const initialEditForm = {
   fullName: "",
@@ -41,6 +50,12 @@ function formatDate(value) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function formatStatus(value) {
+  return String(value || "pending")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function toEditForm(order) {
@@ -365,7 +380,11 @@ export default function AdminOrderPage() {
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-sm font-semibold text-slate-500">Pending</p>
           <p className="mt-1 text-2xl font-bold text-slate-900">
-            {orders.filter((order) => order.status === "pending").length}
+            {
+              orders.filter((order) =>
+                ["pending", "pending_payment"].includes(order.status),
+              ).length
+            }
           </p>
         </div>
       </div>
@@ -513,7 +532,7 @@ export default function AdminOrderPage() {
                 >
                   {orderStatuses.map((status) => (
                     <option key={status} value={status}>
-                      {status}
+                      {formatStatus(status)}
                     </option>
                   ))}
                 </select>
@@ -544,6 +563,7 @@ export default function AdminOrderPage() {
                   <option value="paypal">PayPal</option>
                   <option value="venmo">Venmo</option>
                   <option value="cashapp">Cash App</option>
+                  <option value="stripe">Stripe</option>
                 </select>
               </label>
 
@@ -766,9 +786,14 @@ export default function AdminOrderPage() {
                     {formatCurrency(order.total)}
                   </p>
                   <p className="text-sm capitalize text-slate-600">
-                    {order.status || "pending"} ·{" "}
+                    {formatStatus(order.status)} ·{" "}
                     {order.paymentConfirmed ? "paid" : "payment pending"}
                   </p>
+                  {order.status === "paid_inventory_review" ? (
+                    <p className="mt-1 max-w-xs text-sm font-semibold text-amber-700">
+                      Payment succeeded, but inventory needs manual review.
+                    </p>
+                  ) : null}
                 </div>
               </div>
 

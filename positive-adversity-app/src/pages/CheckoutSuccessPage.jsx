@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { fetchOrder } from "../lib/firestore";
+import { lookupCustomerOrder } from "../lib/firestore";
+import {
+  clearStoreCheckoutDraft,
+  loadStoreCheckoutDraft,
+} from "../lib/storeCheckoutDraft";
 
-const ORDER_RETRY_COUNT = 4;
+const ORDER_RETRY_COUNT = 8;
 const ORDER_RETRY_DELAY_MS = 1200;
+const CONFIRMED_PAYMENT_STATUSES = new Set(["paid", "paid_inventory_review"]);
 
 function formatCurrency(value) {
   const amount = Number(value || 0);
@@ -43,19 +48,43 @@ export default function CheckoutSuccessPage() {
         return;
       }
 
+      let checkoutEmail = "";
+
+      try {
+        const draft = loadStoreCheckoutDraft();
+        checkoutEmail = draft?.checkoutForm?.email || "";
+      } catch (error) {
+        console.error("Unable to load checkout email for order confirmation:", error);
+      }
+
+      if (!checkoutEmail) {
+        setLoading(false);
+        setDetailsUnavailable(true);
+        return;
+      }
+
       setLoading(true);
       setDetailsUnavailable(false);
+      let lastOrder = null;
 
       for (let attempt = 0; attempt < ORDER_RETRY_COUNT; attempt += 1) {
         try {
-          const orderData = await fetchOrder(orderId);
+          const orderData = await lookupCustomerOrder(orderId, checkoutEmail);
 
           if (isCancelled) return;
 
           if (orderData) {
-            setOrder(orderData);
-            setLoading(false);
-            return;
+            lastOrder = orderData;
+
+            if (
+              orderData.finalized === true ||
+              CONFIRMED_PAYMENT_STATUSES.has(orderData.status)
+            ) {
+              clearStoreCheckoutDraft();
+              setOrder(orderData);
+              setLoading(false);
+              return;
+            }
           }
         } catch (error) {
           console.error("Unable to load checkout order:", error);
@@ -73,8 +102,11 @@ export default function CheckoutSuccessPage() {
       }
 
       if (!isCancelled) {
+        if (lastOrder) {
+          setOrder(lastOrder);
+        }
         setLoading(false);
-        setDetailsUnavailable(true);
+        setDetailsUnavailable(!lastOrder);
       }
     }
 
@@ -90,7 +122,14 @@ export default function CheckoutSuccessPage() {
     [order],
   );
 
-  const paymentStatus = order?.paymentConfirmed ? "Paid" : "Payment received";
+  const isConfirmed =
+    order?.finalized === true || CONFIRMED_PAYMENT_STATUSES.has(order?.status);
+  const needsInventoryReview = order?.status === "paid_inventory_review";
+  const paymentStatus = isConfirmed
+    ? needsInventoryReview
+      ? "Paid - inventory review"
+      : "Paid"
+    : "Payment received - confirming";
 
   return (
     <section className="mx-auto max-w-4xl text-slate-950">
@@ -100,14 +139,15 @@ export default function CheckoutSuccessPage() {
             <span aria-hidden="true">✓</span>
           </div>
           <p className="mt-5 text-sm font-black uppercase tracking-[0.22em] text-emerald-700">
-            Payment Successful
+            {isConfirmed ? "Payment Successful" : "Payment Received"}
           </p>
           <h1 className="mt-3 text-3xl font-black text-slate-950 sm:text-4xl">
-            Thanks for your order.
+            {isConfirmed ? "Thanks for your order." : "Confirming your order."}
           </h1>
           <p className="mx-auto mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-600 sm:text-base">
-            Your payment was received. We are preparing your order details now,
-            and your receipt information will appear here when available.
+            {isConfirmed
+              ? "Your payment was confirmed. We are preparing your order details now."
+              : "Your payment was received by Stripe. We are waiting for the secure confirmation before finalizing the order."}
           </p>
         </div>
 
@@ -167,15 +207,24 @@ export default function CheckoutSuccessPage() {
 
               {loading ? (
                 <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">
-                  We are pulling in your order details. This can take a moment
-                  right after payment.
+                  Payment received - confirming your order. This can take a
+                  moment while Stripe sends the secure confirmation.
                 </p>
               ) : null}
 
               {!loading && detailsUnavailable ? (
                 <p className="mt-4 rounded-xl bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-900">
-                  Your payment was successful. Order details are not available
-                  here yet, but your payment has been received.
+                  We could not load the order confirmation yet. Your cart has
+                  not been cleared, so please check again shortly or contact us
+                  with your order ID.
+                </p>
+              ) : null}
+
+              {!loading && order && !isConfirmed ? (
+                <p className="mt-4 rounded-xl bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-900">
+                  Stripe has redirected you back, but the order is still waiting
+                  for secure webhook confirmation. Your cart has not been
+                  cleared yet.
                 </p>
               ) : null}
 
@@ -224,6 +273,12 @@ export default function CheckoutSuccessPage() {
                 className="inline-flex justify-center rounded-full bg-slate-950 px-5 py-3 text-sm font-black text-white hover:bg-slate-800"
               >
                 Continue Shopping
+              </Link>
+              <Link
+                to={`/store/order-lookup${orderId ? `?orderId=${encodeURIComponent(orderId)}` : ""}`}
+                className="inline-flex justify-center rounded-full border border-slate-300 px-5 py-3 text-sm font-black text-slate-950 hover:bg-slate-50"
+              >
+                Look Up Order
               </Link>
             </div>
           </div>

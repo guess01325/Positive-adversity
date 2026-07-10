@@ -724,6 +724,18 @@ export async function fetchOrder(orderId) {
   };
 }
 
+export async function lookupCustomerOrder(orderId, email) {
+  const lookupOrder = httpsCallable(cloudFunctions, "lookupCustomerOrder");
+
+  try {
+    const result = await lookupOrder({ orderId, email });
+    return result.data?.order || null;
+  } catch (error) {
+    logCallableError("lookupCustomerOrder", error, { orderId });
+    throw error;
+  }
+}
+
 export async function fetchOrders() {
   const snapshot = await getDocs(collection(db, "orders"));
 

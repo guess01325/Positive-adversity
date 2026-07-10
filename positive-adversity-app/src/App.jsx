@@ -16,6 +16,7 @@ import MainPageLayout from "./components/MainPageLayout";
 import Store from "./pages/Store";
 import CheckoutSuccessPage from "./pages/CheckoutSuccessPage";
 import CheckoutCancelPage from "./pages/CheckoutCancelPage";
+import OrderLookupPage from "./pages/OrderLookupPage";
 import AdminOrderPage from "./pages/AdminOrderPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import Events from "./pages/Events";
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="/" element={<MainPageLayout />}>
 
             <Route path="/store" element={<Store />} />
+            <Route path="/store/order-lookup" element={<OrderLookupPage />} />
             <Route
               path="/store/checkout/success"
               element={<CheckoutSuccessPage />}
@@ -69,6 +71,7 @@ export default function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="store" element={<Store />} />
+            <Route path="store/order-lookup" element={<OrderLookupPage />} />
             <Route
               path="store/checkout/success"
               element={<CheckoutSuccessPage />}

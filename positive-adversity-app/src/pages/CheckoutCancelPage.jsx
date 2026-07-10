@@ -1,8 +1,20 @@
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { loadStoreCheckoutDraft } from "../lib/storeCheckoutDraft";
 
 export default function CheckoutCancelPage() {
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get("orderId");
+  const [hasSavedCart, setHasSavedCart] = useState(false);
+
+  useEffect(() => {
+    try {
+      const draft = loadStoreCheckoutDraft();
+      setHasSavedCart(Array.isArray(draft?.cartItems) && draft.cartItems.length > 0);
+    } catch (error) {
+      console.error("Unable to inspect saved checkout draft:", error);
+    }
+  }, []);
 
   return (
     <section className="mx-auto max-w-2xl text-slate-950">
@@ -18,8 +30,8 @@ export default function CheckoutCancelPage() {
             Payment was not completed.
           </h1>
           <p className="mx-auto mt-3 max-w-xl text-sm font-semibold leading-6 text-slate-600 sm:text-base">
-            Your card was not charged. You can return to the store to review
-            your cart and try checkout again when you are ready.
+            Your card was not charged. Return to your cart to review the saved
+            items and try checkout again when you are ready.
           </p>
         </div>
 
@@ -35,11 +47,17 @@ export default function CheckoutCancelPage() {
             </div>
           ) : null}
 
+          <p className="rounded-xl bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-900">
+            {hasSavedCart
+              ? "Your cart, quantities, selected options, and checkout details are saved on this device."
+              : "No saved cart was found on this device. If you used another browser or device, return there to continue checkout."}
+          </p>
+
           <Link
             to="/store"
             className="inline-flex w-full justify-center rounded-full bg-slate-950 px-5 py-3 text-sm font-black text-white hover:bg-slate-800 sm:w-auto"
           >
-            Return to Store
+            {hasSavedCart ? "Return to Cart" : "Return to Store"}
           </Link>
         </div>
       </div>
