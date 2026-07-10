@@ -768,8 +768,13 @@ export async function updateOrder(orderId, updates) {
     throw new Error("Missing order id for update.");
   }
 
+  const customerEmail = updates.customer?.email;
+
   await updateDoc(doc(db, "orders", orderId), {
     ...updates,
+    ...(customerEmail
+      ? { customerEmailNormalized: normalizeEmail(customerEmail) }
+      : {}),
     updatedAt: serverTimestamp(),
   });
 }

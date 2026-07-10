@@ -30,6 +30,8 @@ const ORDER_LOOKUP_WINDOW_MS = 15 * 60 * 1000;
 const ORDER_LOOKUP_EMAIL_LIST_LIMIT = 20;
 const ORDER_LOOKUP_GENERIC_ERROR =
   "Order not found or information does not match.";
+const ORDER_LOOKUP_TEMPORARY_ERROR =
+  "Order lookup is temporarily unavailable. Please try again later.";
 
 let stripeClient;
 
@@ -59,6 +61,27 @@ function requireEmail(value) {
 
 function normalizeEmail(value) {
   return cleanString(value, 120).toLowerCase();
+}
+
+function getOrderEmailCandidates(order = {}) {
+  return [
+    order.customerEmailNormalized,
+    order.customer?.email,
+    order.customerEmail,
+    order.email,
+    order.payment?.customerEmail,
+  ]
+    .map(normalizeEmail)
+    .filter(Boolean);
+}
+
+function getOrderEmailNormalized(order = {}) {
+  return getOrderEmailCandidates(order)[0] || "";
+}
+
+function orderEmailMatches(order, email) {
+  const normalizedEmail = normalizeEmail(email);
+  return getOrderEmailCandidates(order).includes(normalizedEmail);
 }
 
 function parseQuantity(value) {
@@ -208,7 +231,7 @@ function toCustomerOrderResponse(orderId, order) {
   return {
     orderNumber: order.orderNumber || orderId,
     customerName: cleanString(order.customer?.fullName, 120),
-    email: maskEmail(order.customer?.email),
+    email: maskEmail(getOrderEmailNormalized(order)),
     items: finalized ? safeItems : [],
     total: finalized ? Number(order.total || 0) : null,
     paymentStatus: order.paymentStatus || (finalized ? "paid" : "pending"),
@@ -276,6 +299,37 @@ async function assertOrderLookupAllowed(orderId, email) {
       { merge: true },
     );
   });
+}
+
+async function fetchOrdersByEmail(email) {
+  const matchingOrders = new Map();
+  const lookupFields = [
+    "customerEmailNormalized",
+    "customer.email",
+    "customerEmail",
+    "email",
+    "payment.customerEmail",
+  ];
+
+  for (const fieldPath of lookupFields) {
+    const snapshot = await db
+      .collection("orders")
+      .where(fieldPath, "==", email)
+      .get();
+
+    snapshot.docs.forEach((orderDoc) => {
+      const order = orderDoc.data() || {};
+
+      if (orderEmailMatches(order, email)) {
+        matchingOrders.set(orderDoc.id, order);
+      }
+    });
+  }
+
+  return Array.from(matchingOrders.entries()).map(([id, order]) => ({
+    id,
+    order,
+  }));
 }
 
 function getTimestampOrServerTimestamp(value) {
@@ -568,6 +622,7 @@ exports.submitStoreOrder = onCall(async (request) => {
       const orderData = {
         orderNumber: orderRef.id,
         customer: checkout.customer,
+        customerEmailNormalized: normalizeEmail(checkout.customer.email),
         shippingAddress: checkout.shippingAddress,
         payment: checkout.payment,
         paymentMethod: checkout.payment.option,
@@ -645,18 +700,15 @@ exports.lookupCustomerOrder = onCall(async (request) => {
     throw new HttpsError("not-found", ORDER_LOOKUP_GENERIC_ERROR);
   }
 
-  await assertOrderLookupAllowed(orderId || "email-only", email);
-
   try {
+    await assertOrderLookupAllowed(orderId || "email-only", email);
+
     if (!orderId) {
-      const ordersSnap = await db
-        .collection("orders")
-        .where("customer.email", "==", email)
-        .get();
-      const orders = ordersSnap.docs
-        .map((orderDoc) => ({
-          id: orderDoc.id,
-          ...toCustomerOrderSummaryResponse(orderDoc.id, orderDoc.data() || {}),
+      const matchedOrders = await fetchOrdersByEmail(email);
+      const orders = matchedOrders
+        .map(({ id, order }) => ({
+          id,
+          ...toCustomerOrderSummaryResponse(id, order),
         }))
         .sort((a, b) => {
           const dateA = a.orderDate ? new Date(a.orderDate).getTime() : 0;
@@ -677,9 +729,8 @@ exports.lookupCustomerOrder = onCall(async (request) => {
 
     const orderSnap = await db.collection("orders").doc(orderId).get();
     const order = orderSnap.exists ? orderSnap.data() || {} : null;
-    const orderEmail = normalizeEmail(order?.customer?.email);
 
-    if (!order || orderEmail !== email) {
+    if (!order || !orderEmailMatches(order, email)) {
       console.warn("[store checkout] order lookup mismatch", {
         orderId,
         hasOrder: Boolean(order),
@@ -703,7 +754,7 @@ exports.lookupCustomerOrder = onCall(async (request) => {
 
     throw new HttpsError(
       "internal",
-      "Order lookup is unavailable right now. Please try again later.",
+      ORDER_LOOKUP_TEMPORARY_ERROR,
     );
   }
 });
