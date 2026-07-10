@@ -69,7 +69,8 @@ export default function CheckoutSuccessPage() {
 
       for (let attempt = 0; attempt < ORDER_RETRY_COUNT; attempt += 1) {
         try {
-          const orderData = await lookupCustomerOrder(orderId, checkoutEmail);
+          const lookupResult = await lookupCustomerOrder(orderId, checkoutEmail);
+          const orderData = lookupResult.order;
 
           if (isCancelled) return;
 

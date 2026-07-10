@@ -728,8 +728,8 @@ export async function lookupCustomerOrder(orderId, email) {
   const lookupOrder = httpsCallable(cloudFunctions, "lookupCustomerOrder");
 
   try {
-    const result = await lookupOrder({ orderId, email });
-    return result.data?.order || null;
+    const result = await lookupOrder({ orderId: orderId || "", email });
+    return result.data || {};
   } catch (error) {
     logCallableError("lookupCustomerOrder", error, { orderId });
     throw error;

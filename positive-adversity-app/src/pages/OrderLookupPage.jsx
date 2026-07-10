@@ -32,20 +32,38 @@ function formatStatus(value) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function getLookupErrorMessage(error) {
+  return error?.code === "resource-exhausted"
+    ? "Too many lookup attempts. Please try again later."
+    : "Order not found or information does not match.";
+}
+
 export default function OrderLookupPage() {
   const [searchParams] = useSearchParams();
+  const [lookupMode, setLookupMode] = useState(
+    searchParams.get("orderId") ? "specific" : "email",
+  );
   const [form, setForm] = useState({
     orderId: searchParams.get("orderId") || "",
     email: "",
   });
   const [order, setOrder] = useState(null);
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingOrderId, setLoadingOrderId] = useState("");
   const [error, setError] = useState("");
 
   const items = useMemo(
     () => (Array.isArray(order?.items) ? order.items : []),
     [order],
   );
+
+  function handleModeChange(nextMode) {
+    setLookupMode(nextMode);
+    setError("");
+    setOrder(null);
+    setOrders([]);
+  }
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -60,31 +78,57 @@ export default function OrderLookupPage() {
     event.preventDefault();
     setError("");
     setOrder(null);
+    setOrders([]);
+
+    const email = form.email.trim();
+    const orderId = lookupMode === "specific" ? form.orderId.trim() : "";
+
+    if (!email || (lookupMode === "specific" && !orderId)) {
+      setError("Order not found or information does not match.");
+      return;
+    }
 
     try {
       setLoading(true);
-      const result = await lookupCustomerOrder(
-        form.orderId.trim(),
-        form.email.trim(),
-      );
-      setOrder(result);
+      const result = await lookupCustomerOrder(orderId, email);
+
+      if (lookupMode === "specific") {
+        setOrder(result.order || null);
+      } else {
+        setOrders(Array.isArray(result.orders) ? result.orders : []);
+      }
     } catch (lookupError) {
       console.error("Order lookup failed:", {
         code: lookupError?.code,
         message: lookupError?.message,
       });
-      setError(
-        lookupError?.code === "resource-exhausted"
-          ? "Too many lookup attempts. Please try again later."
-          : "Order not found or information does not match.",
-      );
+      setError(getLookupErrorMessage(lookupError));
     } finally {
       setLoading(false);
     }
   }
 
+  async function handleSelectOrder(orderNumber) {
+    setError("");
+    setOrder(null);
+    setLoadingOrderId(orderNumber);
+
+    try {
+      const result = await lookupCustomerOrder(orderNumber, form.email.trim());
+      setOrder(result.order || null);
+    } catch (lookupError) {
+      console.error("Order detail lookup failed:", {
+        code: lookupError?.code,
+        message: lookupError?.message,
+      });
+      setError(getLookupErrorMessage(lookupError));
+    } finally {
+      setLoadingOrderId("");
+    }
+  }
+
   return (
-    <section className="mx-auto max-w-4xl space-y-6 text-slate-950">
+    <section className="mx-auto max-w-5xl space-y-6 text-slate-950">
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-black/20">
         <div className="border-b border-slate-200 bg-slate-50 px-5 py-8 sm:px-8">
           <p className="text-sm font-black uppercase tracking-[0.22em] text-slate-500">
@@ -94,26 +138,54 @@ export default function OrderLookupPage() {
             Find your store order.
           </h1>
           <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-600 sm:text-base">
-            Enter your order number and the email used at checkout.
+            Use your order number and checkout email, or find recent orders by
+            email.
           </p>
         </div>
 
-        <div className="grid gap-6 p-5 sm:p-8 lg:grid-cols-[0.85fr_1.15fr]">
+        <div className="grid gap-6 p-5 sm:p-8 lg:grid-cols-[0.8fr_1.2fr]">
           <form className="space-y-4" onSubmit={handleSubmit}>
-            <div>
-              <label className="text-sm font-black text-slate-800">
-                Order Number
-                <input
-                  type="text"
-                  name="orderId"
-                  value={form.orderId}
-                  onChange={handleChange}
-                  required
-                  className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-                  placeholder="Order number"
-                />
-              </label>
+            <div className="grid gap-2 rounded-2xl bg-slate-100 p-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => handleModeChange("specific")}
+                className={`rounded-xl px-4 py-3 text-sm font-black ${
+                  lookupMode === "specific"
+                    ? "bg-slate-950 text-white"
+                    : "text-slate-700 hover:bg-white"
+                }`}
+              >
+                Find a specific order
+              </button>
+              <button
+                type="button"
+                onClick={() => handleModeChange("email")}
+                className={`rounded-xl px-4 py-3 text-sm font-black ${
+                  lookupMode === "email"
+                    ? "bg-slate-950 text-white"
+                    : "text-slate-700 hover:bg-white"
+                }`}
+              >
+                Find my orders by email
+              </button>
             </div>
+
+            {lookupMode === "specific" ? (
+              <div>
+                <label className="text-sm font-black text-slate-800">
+                  Order Number
+                  <input
+                    type="text"
+                    name="orderId"
+                    value={form.orderId}
+                    onChange={handleChange}
+                    required
+                    className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                    placeholder="Order number"
+                  />
+                </label>
+              </div>
+            ) : null}
 
             <div>
               <label className="text-sm font-black text-slate-800">
@@ -141,7 +213,11 @@ export default function OrderLookupPage() {
               disabled={loading}
               className="w-full rounded-full bg-slate-950 px-5 py-3 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? "Looking Up..." : "Look Up Order"}
+              {loading
+                ? "Looking Up..."
+                : lookupMode === "specific"
+                  ? "Look Up Order"
+                  : "Find My Orders"}
             </button>
 
             <Link
@@ -152,18 +228,67 @@ export default function OrderLookupPage() {
             </Link>
           </form>
 
-          <div className="rounded-xl border border-slate-200 p-4">
-            {!order && !loading ? (
+          <div className="space-y-4 rounded-xl border border-slate-200 p-4">
+            {!order && orders.length === 0 && !loading ? (
               <p className="rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">
-                Your order summary will appear here after we verify the order
-                number and checkout email.
+                Results will appear here after we verify the checkout email.
               </p>
             ) : null}
 
             {loading ? (
               <p className="rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">
-                Checking your order...
+                Checking orders...
               </p>
+            ) : null}
+
+            {orders.length > 0 ? (
+              <div className="space-y-3">
+                <div>
+                  <h2 className="text-lg font-black text-slate-950">
+                    Orders Found
+                  </h2>
+                  <p className="mt-1 text-sm font-semibold text-slate-600">
+                    Select an order to view its details.
+                  </p>
+                </div>
+
+                <div className="divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200">
+                  {orders.map((summary) => (
+                    <button
+                      key={summary.orderNumber}
+                      type="button"
+                      onClick={() => handleSelectOrder(summary.orderNumber)}
+                      disabled={Boolean(loadingOrderId)}
+                      className="grid w-full gap-2 bg-white p-4 text-left hover:bg-slate-50 disabled:cursor-wait sm:grid-cols-[1fr_auto]"
+                    >
+                      <div>
+                        <p className="break-all text-sm font-black text-slate-950">
+                          {summary.orderNumber}
+                        </p>
+                        <p className="mt-1 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                          {formatDate(summary.orderDate)}
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-slate-600">
+                          {formatStatus(summary.paymentStatus)} ·{" "}
+                          {formatStatus(summary.fulfillmentStatus)}
+                        </p>
+                      </div>
+                      <div className="text-left sm:text-right">
+                        <p className="text-lg font-black text-slate-950">
+                          {summary.total == null
+                            ? "Pending"
+                            : formatCurrency(summary.total)}
+                        </p>
+                        <p className="mt-1 text-xs font-bold text-slate-500">
+                          {loadingOrderId === summary.orderNumber
+                            ? "Loading..."
+                            : "View details"}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             ) : null}
 
             {order ? (

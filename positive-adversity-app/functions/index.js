@@ -27,6 +27,7 @@ const STRIPE_PAID_STATUS = "paid";
 const STRIPE_INVENTORY_REVIEW_STATUS = "paid_inventory_review";
 const ORDER_LOOKUP_LIMIT = 8;
 const ORDER_LOOKUP_WINDOW_MS = 15 * 60 * 1000;
+const ORDER_LOOKUP_EMAIL_LIST_LIMIT = 20;
 const ORDER_LOOKUP_GENERIC_ERROR =
   "Order not found or information does not match.";
 
@@ -225,6 +226,18 @@ function toCustomerOrderResponse(orderId, order) {
           zip: cleanString(order.shippingAddress?.zip, 20),
         }
       : null,
+  };
+}
+
+function toCustomerOrderSummaryResponse(orderId, order) {
+  const finalized = isCustomerOrderFinalized(order);
+
+  return {
+    orderNumber: order.orderNumber || orderId,
+    orderDate: serializeTimestamp(order.createdAt),
+    total: finalized ? Number(order.total || 0) : null,
+    paymentStatus: order.paymentStatus || (finalized ? "paid" : "pending"),
+    fulfillmentStatus: order.fulfillmentStatus || getCustomerOrderStatus(order),
   };
 }
 
@@ -624,7 +637,7 @@ exports.lookupCustomerOrder = onCall(async (request) => {
   const orderId = cleanString(request.data?.orderId, 120);
   const email = normalizeEmail(request.data?.email);
 
-  if (!orderId || !email) {
+  if (!email) {
     throw new HttpsError("not-found", ORDER_LOOKUP_GENERIC_ERROR);
   }
 
@@ -632,9 +645,36 @@ exports.lookupCustomerOrder = onCall(async (request) => {
     throw new HttpsError("not-found", ORDER_LOOKUP_GENERIC_ERROR);
   }
 
-  await assertOrderLookupAllowed(orderId, email);
+  await assertOrderLookupAllowed(orderId || "email-only", email);
 
   try {
+    if (!orderId) {
+      const ordersSnap = await db
+        .collection("orders")
+        .where("customer.email", "==", email)
+        .get();
+      const orders = ordersSnap.docs
+        .map((orderDoc) => ({
+          id: orderDoc.id,
+          ...toCustomerOrderSummaryResponse(orderDoc.id, orderDoc.data() || {}),
+        }))
+        .sort((a, b) => {
+          const dateA = a.orderDate ? new Date(a.orderDate).getTime() : 0;
+          const dateB = b.orderDate ? new Date(b.orderDate).getTime() : 0;
+          return dateB - dateA;
+        })
+        .slice(0, ORDER_LOOKUP_EMAIL_LIST_LIMIT);
+
+      if (orders.length === 0) {
+        console.warn("[store checkout] order email lookup empty");
+        throw new HttpsError("not-found", ORDER_LOOKUP_GENERIC_ERROR);
+      }
+
+      return {
+        orders,
+      };
+    }
+
     const orderSnap = await db.collection("orders").doc(orderId).get();
     const order = orderSnap.exists ? orderSnap.data() || {} : null;
     const orderEmail = normalizeEmail(order?.customer?.email);
