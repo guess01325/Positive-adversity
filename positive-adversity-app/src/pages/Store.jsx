@@ -44,6 +44,20 @@ const initialCheckoutForm = {
   paymentReferenceId: "",
 };
 
+function formatUsPhoneNumber(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 10);
+
+  if (digits.length <= 3) {
+    return digits;
+  }
+
+  if (digits.length <= 6) {
+    return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  }
+
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
 const paymentMethods = [
   {
     value: "cashapp",
@@ -451,10 +465,11 @@ export default function Store() {
 
   function handleCheckoutChange(event) {
     const { checked, name, type, value } = event.target;
+    const nextValue = name === "phone" ? formatUsPhoneNumber(value) : value;
 
     setCheckoutForm((currentForm) => ({
       ...currentForm,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: type === "checkbox" ? checked : nextValue,
       ...(name === "paymentOption"
         ? {
             paymentCompleted: false,
