@@ -25,7 +25,7 @@ export const storeProducts = [
     description: "A warm Positive Adversity hoodie for cooler days.",
     image: "/store/hoodie.png",
     category: "Merch",
-    sizes: ["S", "M", "L", "XL"],
+    sizes: ["One Size", "Small", "Medium", "Large", "XL", "XXL"],
     featured: true,
     inStock: true,
   },
@@ -35,7 +35,7 @@ export const storeProducts = [
     description: "Positive Adversity shoes for everyday wear.",
     image: "/store/hoodie.png",
     category: "Shoes",
-    sizes: ["S", "M", "L", "XL"],
+    sizes: ["5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"],
     featured: true,
     inStock: true,
   },
@@ -77,7 +77,7 @@ export const productSizesByCategory = {
   Shirts: ["YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL"],
   Shorts: ["YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL"],
   Pants: ["YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL"],
-  "Accessories/Merch": ["One Size"],
+  "Accessories/Merch": ["One Size", "Small", "Medium", "Large", "XL", "XXL"],
   Shoes: [
     "5",
     "6",
@@ -89,6 +89,8 @@ export const productSizesByCategory = {
     "12",
     "13",
     "14",
+    "15",
+    "16",
   ],
 };
 
