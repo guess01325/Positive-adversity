@@ -4,6 +4,7 @@ import { Share } from "@capacitor/share";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import logo from "../assets/logo-full.png";
+import { getEntryMonthKey } from "./entryMonth";
 
 function formatCurrency(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -90,8 +91,8 @@ function getEntryDateValue(entry) {
   return entry?.date || entry?.startTime || "";
 }
 
-function buildGroupedEntryRows(entries) {
-  const sortedEntries = [...entries].sort((a, b) => {
+function sortEntriesByStudentAndDate(entries) {
+  return [...entries].sort((a, b) => {
     const studentCompare = getStudentLabel(a).localeCompare(
       getStudentLabel(b),
       undefined,
@@ -102,6 +103,25 @@ function buildGroupedEntryRows(entries) {
 
     return getEntryDateValue(a).localeCompare(getEntryDateValue(b));
   });
+}
+
+function groupEntriesByStudent(entries) {
+  return sortEntriesByStudentAndDate(entries).reduce((groups, entry) => {
+    const student = getStudentLabel(entry);
+    const currentGroup = groups[groups.length - 1];
+
+    if (!currentGroup || currentGroup.student !== student) {
+      groups.push({ student, entries: [entry] });
+    } else {
+      currentGroup.entries.push(entry);
+    }
+
+    return groups;
+  }, []);
+}
+
+function buildGroupedEntryRows(entries) {
+  const sortedEntries = sortEntriesByStudentAndDate(entries);
 
   const rows = [];
   let currentStudent = "";
@@ -198,29 +218,9 @@ function buildGroupedEntryRows(entries) {
   return rows;
 }
 
-export async function exportEntriesPdf({
-  entries = [],
-  selectedMonth = "all",
-  visibleUserLabel = "All Users",
-  dcfSupervisionAmount = 0,
-}) {
-  const doc = new jsPDF({
-    orientation: "landscape",
-    unit: "mm",
-    format: "a4",
-  });
-
+function drawReportHeader(doc, logoDataUrl) {
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  let logoDataUrl = null;
-
-  try {
-    logoDataUrl = await imageToDataUrl(logo);
-  } catch (error) {
-    console.error("Failed to load logo for PDF:", error);
-  }
-
-  // HEADER (LEFT ONLY)
   if (logoDataUrl) {
     const imageFormat = getImageFormatFromDataUrl(logoDataUrl);
     doc.addImage(logoDataUrl, imageFormat, 10, 8, 22, 22);
@@ -236,27 +236,50 @@ export async function exportEntriesPdf({
   doc.text("www.positiveadversity.org", 36, 26);
   doc.text("(860) 625-6656", 36, 32);
 
-  // ADDITION: RIGHT-SIDE DBA BLOCK
   const rightX = pageWidth - 10;
   doc.setFont("times", "bold");
   doc.setFontSize(11);
   doc.text("DBA: Positive Adversity Youth Services Inc.", rightX, 14, {
     align: "right",
   });
-  doc.text("Allan V. Chaney, LLC", rightX, 20, {
-    align: "right",
-  });
-  doc.text("43 Granada Terrace", rightX, 26, {
-    align: "right",
-  });
-  doc.text("New London, CT 06320", rightX, 32, {
-    align: "right",
-  });
+  doc.text("Allan V. Chaney, LLC", rightX, 20, { align: "right" });
+  doc.text("43 Granada Terrace", rightX, 26, { align: "right" });
+  doc.text("New London, CT 06320", rightX, 32, { align: "right" });
 
   doc.setDrawColor(220, 220, 220);
   doc.line(10, 40, pageWidth - 10, 40);
+}
 
-  const totals = entries.reduce(
+export async function exportEntriesPdf({
+  entries = [],
+  selectedMonth = "all",
+  visibleUserLabel = "All Users",
+  dcfSupervisionAmount = 0,
+}) {
+  const doc = new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4",
+  });
+
+  let logoDataUrl = null;
+
+  try {
+    logoDataUrl = await imageToDataUrl(logo);
+  } catch (error) {
+    console.error("Failed to load logo for PDF:", error);
+  }
+
+  drawReportHeader(doc, logoDataUrl);
+
+  const reportEntries =
+    selectedMonth === "all"
+      ? entries
+      : entries.filter(
+          (entry) => getEntryMonthKey(entry) === selectedMonth,
+        );
+
+  const totals = reportEntries.reduce(
     (acc, entry) => {
       const hours = Number(entry?.hours || 0);
       const internalTotal = getInternalTotal(entry);
@@ -273,32 +296,41 @@ export async function exportEntriesPdf({
   const finalInternalTotal =
     totals.internalTotal + Number(dcfSupervisionAmount || 0);
 
-  autoTable(doc, {
-    startY: 46,
-    showHead: "firstPage",
-    head: [[
-      "Student",
-      "Service",
-      "Date",
-      "Time",
-      "Hours",
-      "Internal Rate",
-      "Internal Total",
-    ]],
-    body: buildGroupedEntryRows(entries),
-    styles: {
-      font: "helvetica",
-      fontSize: 8,
-      cellPadding: 2.5,
-      overflow: "linebreak",
-    },
-    headStyles: {
-      fillColor: [15, 23, 42],
-      textColor: [255, 255, 255],
-      fontStyle: "bold",
-    },
-    theme: "grid",
-    margin: { left: 10, right: 10 },
+  const studentGroups = groupEntriesByStudent(reportEntries);
+
+  studentGroups.forEach((group, index) => {
+    if (index > 0) {
+      doc.addPage();
+      drawReportHeader(doc, logoDataUrl);
+    }
+
+    autoTable(doc, {
+      startY: 46,
+      showHead: "firstPage",
+      head: [[
+        "Student",
+        "Service",
+        "Date",
+        "Time",
+        "Hours",
+        "Internal Rate",
+        "Internal Total",
+      ]],
+      body: buildGroupedEntryRows(group.entries),
+      styles: {
+        font: "helvetica",
+        fontSize: 8,
+        cellPadding: 2.5,
+        overflow: "linebreak",
+      },
+      headStyles: {
+        fillColor: [15, 23, 42],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+      },
+      theme: "grid",
+      margin: { left: 10, right: 10 },
+    });
   });
 
   const finalY = doc.lastAutoTable?.finalY || 60;
@@ -309,40 +341,7 @@ export async function exportEntriesPdf({
   if (summaryY > pageHeight - 12) {
     doc.addPage();
 
-    if (logoDataUrl) {
-      const imageFormat = getImageFormatFromDataUrl(logoDataUrl);
-      doc.addImage(logoDataUrl, imageFormat, 10, 8, 22, 22);
-    }
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text("Positive Adversity Youth Services Inc.", 36, 14);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text("Allan@PositiveAdversity.org", 36, 20);
-    doc.text("www.positiveadversity.org", 36, 26);
-    doc.text("(860) 625-6656", 36, 32);
-
-    // ADDITION: RIGHT-SIDE DBA BLOCK ON NEW PAGE TOO
-    const rightX = pageWidth - 10;
-    doc.setFont("times", "bold");
-    doc.setFontSize(11);
-    doc.text("DBA: Positive Adversity Youth Services Inc.", rightX, 14, {
-      align: "right",
-    });
-    doc.text("Allan V. Chaney, LLC", rightX, 20, {
-      align: "right",
-    });
-    doc.text("43 Granada Terrace", rightX, 26, {
-      align: "right",
-    });
-    doc.text("New London, CT 06320", rightX, 32, {
-      align: "right",
-    });
-
-    doc.setDrawColor(220, 220, 220);
-    doc.line(10, 40, pageWidth - 10, 40);
+    drawReportHeader(doc, logoDataUrl);
 
     summaryY = 52;
   }
@@ -359,7 +358,7 @@ export async function exportEntriesPdf({
   );
   doc.text(
     `Internal Total: ${formatCurrency(finalInternalTotal)}`,
-    287,
+    doc.internal.pageSize.getWidth() - 10,
     summaryY,
     { align: "right" }
   );

@@ -11,6 +11,10 @@ import {
 } from "../lib/firestore";
 import { exportEntriesPdf } from "../lib/exportReportPdf";
 import { SERVICE_OPTIONS, SERVICE_RATES } from "../lib/constants";
+import {
+  getEntryMonthKey,
+  monthKeyFromEntryDate,
+} from "../lib/entryMonth";
 
 function formatDateForInput(dateValue) {
   if (!dateValue) return "";
@@ -62,11 +66,6 @@ function calculateHours(startDate, endDate) {
 
   const hours = diffMs / (1000 * 60 * 60);
   return Number(hours.toFixed(2));
-}
-
-function getMonthKey(dateStr) {
-  if (!dateStr) return "";
-  return dateStr.slice(0, 7);
 }
 
 function formatMoney(value) {
@@ -146,13 +145,7 @@ export default function AdminPage() {
       new Set(
         entries
           .map((entry) => {
-            if (entry.monthKey) return entry.monthKey;
-            if (entry.date) return getMonthKey(entry.date);
-            if (entry.startTime) {
-              const dateStr = formatDateForInput(entry.startTime);
-              return getMonthKey(dateStr);
-            }
-            return "";
+            return getEntryMonthKey(entry);
           })
           .filter(Boolean),
       ),
@@ -166,12 +159,7 @@ export default function AdminPage() {
       const matchesUser =
         selectedUser === "all" || entry.userId === selectedUser;
 
-      const entryMonth =
-        entry.monthKey ||
-        getMonthKey(entry.date) ||
-        (entry.startTime
-          ? getMonthKey(formatDateForInput(entry.startTime))
-          : "");
+      const entryMonth = getEntryMonthKey(entry);
 
       const matchesMonth =
         selectedMonth === "all" || entryMonth === selectedMonth;
@@ -469,7 +457,7 @@ export default function AdminPage() {
         student: editForm.student.trim(),
         serviceType,
         date: editForm.date,
-        monthKey: getMonthKey(editForm.date),
+        monthKey: monthKeyFromEntryDate(editForm.date),
         startTime: startDateTime.toISOString(),
         endTime: endDateTime.toISOString(),
         hours,

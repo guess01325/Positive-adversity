@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { getEntryMonthKey } from "../lib/entryMonth";
 
 function formatMoney(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -54,8 +55,7 @@ function getInternalTotal(entry) {
 
 function groupEntriesByMonth(entries) {
   return entries.reduce((acc, entry) => {
-    const monthKey =
-      entry.monthKey || (entry.date ? entry.date.slice(0, 7) : "Unknown Month");
+    const monthKey = getEntryMonthKey(entry) || "Unknown Month";
 
     if (!acc[monthKey]) {
       acc[monthKey] = [];

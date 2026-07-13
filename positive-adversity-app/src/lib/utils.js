@@ -1,4 +1,5 @@
 import { SERVICE_RATES } from './constants';
+import { getEntryMonthKey, monthKeyFromEntryDate } from './entryMonth';
 
 export function calculateHours(startTime, endTime) {
   if (!startTime || !endTime) return 0;
@@ -28,9 +29,7 @@ export function formatCurrency(value) {
 }
 
 export function toMonthKey(dateString) {
-  const date = new Date(dateString);
-  const month = `${date.getMonth() + 1}`.padStart(2, '0');
-  return `${date.getFullYear()}-${month}`;
+  return monthKeyFromEntryDate(dateString);
 }
 
 export function toMonthLabel(monthKey) {
@@ -41,7 +40,7 @@ export function toMonthLabel(monthKey) {
 
 export function groupEntriesByMonth(entries) {
   return entries.reduce((acc, entry) => {
-    const key = entry.monthKey;
+    const key = getEntryMonthKey(entry) || 'Unknown Month';
     if (!acc[key]) {
       acc[key] = { entries: [], totalPay: 0, totalHours: 0 };
     }
@@ -51,8 +50,6 @@ export function groupEntriesByMonth(entries) {
     return acc;
   }, {});
 }
-
-
 
 
 

@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { SERVICE_OPTIONS, SERVICE_RATES } from '../lib/constants';
 import { calculateHours, toMonthKey } from '../lib/utils';
+import { formatLocalCalendarDate } from '../lib/entryMonth';
 
 const NOTE_WORD_LIMIT = 2500;
 
 const initialState = {
   serviceType: 'DCF',
-  date: new Date().toISOString().slice(0, 10),
+  date: formatLocalCalendarDate(),
   startTime: '09:00',
   endTime: '17:00',
   note: '',
