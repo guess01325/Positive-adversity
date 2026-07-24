@@ -16,11 +16,11 @@ test("adds supervised visitation services with stable identifiers", () => {
   assert.ok(serviceValues.includes("mashantucket_supervised_visitation"));
   assert.deepEqual(SERVICE_RATES.dcf_supervised_visitation, {
     client: 25,
-    internal: 45,
+    internal: 55,
   });
   assert.deepEqual(SERVICE_RATES.mashantucket_supervised_visitation, {
     client: 25,
-    internal: 50,
+    internal: 55,
   });
 });
 

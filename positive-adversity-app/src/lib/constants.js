@@ -22,11 +22,11 @@ export const SERVICE_RATES = {
   },
   dcf_supervised_visitation: {
     client: 25,
-    internal: 45,
+    internal: 55,
   },
   mashantucket_supervised_visitation: {
     client: 25,
-    internal: 50,
+    internal: 55,
   },
 };
 
