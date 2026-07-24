@@ -14,11 +14,27 @@
       },
       "oauth_client": [
         {
+          "client_id": "224541354644-4546ervh2got9505dgghpm24lufbtvhp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.positiveadversity.app",
+            "certificate_hash": "b15fd387392bd449b6040175774c14478b5ba1f8"
+          }
+        },
+        {
           "client_id": "224541354644-b96plp8cm1ro2k4n6bt1gmlnjsh6p74v.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.positiveadversity.app",
             "certificate_hash": "526a536a69b8fd7043cbd30332215010ad2cc9f2"
+          }
+        },
+        {
+          "client_id": "224541354644-n3guq6ips8rb4sngjsp3pdbam5j1g2uc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.positiveadversity.app",
+            "certificate_hash": "78f16a174d15e4143e29b01e90ff093e39add49e"
           }
         },
         {
@@ -37,6 +53,13 @@
             {
               "client_id": "224541354644-41o3c3730drbbagg79sinln18kbrnnnb.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "224541354644-d1qt2elkc668jiueppciq69m2359mh7c.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.positiveadversity.mobile"
+              }
             }
           ]
         }
