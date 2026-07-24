@@ -16,8 +16,8 @@ android {
         applicationId "com.positiveadversity.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 13
-        versionName "2.1"
+        versionCode 14
+        versionName "2.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         aaptOptions {
