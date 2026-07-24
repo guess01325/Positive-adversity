@@ -22,6 +22,8 @@ export default function LoginPage() {
   const [mode, setMode] = useState("signin");
 
   async function handleGoogleSignIn() {
+    if (authLoading) return;
+
     try {
       setAuthLoading("google");
       setErrorMessage("");

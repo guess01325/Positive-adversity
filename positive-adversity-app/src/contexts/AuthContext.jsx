@@ -20,6 +20,33 @@ import { getUserRole, upsertUserProfile } from "../lib/firestore";
 const AuthContext = createContext(null);
 
 const APPLE_SERVICE_ID = "com.positiveadversity.mobile.auth";
+let googleSignInInitializePromise = null;
+
+function initializeNativeGoogleSignIn() {
+  if (googleSignInInitializePromise) {
+    return googleSignInInitializePromise;
+  }
+
+  console.info("Google Sign-In initialization started");
+
+  googleSignInInitializePromise = GoogleSignIn.initialize({
+    clientId: GOOGLE_WEB_CLIENT_ID,
+  })
+    .then(() => {
+      console.info("Google Sign-In initialization succeeded");
+    })
+    .catch((error) => {
+      googleSignInInitializePromise = null;
+      console.error("Google Sign-In initialization failed:", {
+        code: error?.code,
+        message: error?.message,
+        name: error?.name,
+      });
+      throw error;
+    });
+
+  return googleSignInInitializePromise;
+}
 
 export function AuthProvider({ children }) {
   const [userProfile, setUserProfile] = useState(null);
@@ -97,16 +124,7 @@ export function AuthProvider({ children }) {
         const isNative = Capacitor.isNativePlatform();
 
         if (isNative && (platform === "ios" || platform === "android")) {
-          try {
-            await GoogleSignIn.initialize({
-              clientId: GOOGLE_WEB_CLIENT_ID,
-              serverClientId: GOOGLE_WEB_CLIENT_ID,
-            });
-          } catch (error) {
-            console.error("Google Sign-In initialize error:", error);
-          } finally {
-            setLoading(false);
-          }
+          await initializeNativeGoogleSignIn();
         }
 
         if (platform === "ios") {
@@ -160,6 +178,9 @@ export function AuthProvider({ children }) {
       const platform = Capacitor.getPlatform();
 
       if (platform === "ios" || platform === "android") {
+        console.info("Google Sign-In sign-in called");
+        await initializeNativeGoogleSignIn();
+
         const result = await GoogleSignIn.signIn();
 
         const idToken =
@@ -192,11 +213,10 @@ export function AuthProvider({ children }) {
       const authResult = await signInWithPopup(auth, provider);
       return authResult.user;
     } catch (error) {
-      console.error("Google sign-in failed full:", {
+      console.error("Google Sign-In sign-in failed:", {
         code: error?.code,
         message: error?.message,
         name: error?.name,
-        stack: error?.stack,
       });
       throw error;
     }
