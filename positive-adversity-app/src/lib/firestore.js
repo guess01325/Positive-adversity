@@ -13,6 +13,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { httpsCallable } from "firebase/functions";
+import { getMonthlyFeeOption } from './constants';
 import { cloudFunctions, db } from './firebase';
 
 export const PROTECTED_ADMIN_EMAIL = 'guess01325@gmail.com';
@@ -508,23 +509,44 @@ export async function deleteEntry(entryId) {
   await deleteDoc(entryRef);
 }
 
-export async function addDCFAdjustment({ monthKey, student, createdBy }) {
+export async function addMonthlyFeeAdjustment({
+  feeType,
+  monthKey,
+  student,
+  createdBy,
+}) {
+  const feeOption = getMonthlyFeeOption(feeType);
+
+  if (!feeOption) {
+    throw new Error('Unknown monthly fee type.');
+  }
+
   if (!monthKey || !student?.trim()) {
-    throw new Error('Missing month or student for DCF adjustment.');
+    throw new Error('Missing month or student for monthly fee.');
   }
 
   const payload = {
-    type: 'dcf_supervision',
-    serviceType: 'DCF',
+    type: feeOption.value,
+    feeName: feeOption.label,
+    serviceType: feeOption.eligibleServiceTypes[0] || '',
     student: student.trim(),
     monthKey,
-    amount: 11.25,
+    amount: feeOption.amount,
     createdBy: createdBy || '',
     createdAt: serverTimestamp(),
   };
 
   const docRef = await addDoc(collection(db, 'invoiceAdjustments'), payload);
   return { id: docRef.id };
+}
+
+export async function addDCFAdjustment({ monthKey, student, createdBy }) {
+  return addMonthlyFeeAdjustment({
+    feeType: 'dcf_supervision',
+    monthKey,
+    student,
+    createdBy,
+  });
 }
 
 export async function fetchAdjustments() {
@@ -536,13 +558,15 @@ export async function fetchAdjustments() {
   }));
 }
 
-export async function fetchDCFAdjustmentsByMonth(monthKey) {
+export async function fetchMonthlyFeeAdjustmentsByMonth(feeType, monthKey) {
   if (!monthKey || monthKey === 'all') return [];
+
+  const feeOption = getMonthlyFeeOption(feeType);
+  if (!feeOption) return [];
 
   const q = query(
     collection(db, 'invoiceAdjustments'),
-    where('type', '==', 'dcf_supervision'),
-    where('serviceType', '==', 'DCF'),
+    where('type', '==', feeOption.value),
     where('monthKey', '==', monthKey)
   );
 
@@ -554,15 +578,21 @@ export async function fetchDCFAdjustmentsByMonth(monthKey) {
   }));
 }
 
-export async function findDCFAdjustment(monthKey, student) {
+export async function fetchDCFAdjustmentsByMonth(monthKey) {
+  return fetchMonthlyFeeAdjustmentsByMonth('dcf_supervision', monthKey);
+}
+
+export async function findMonthlyFeeAdjustment(feeType, monthKey, student) {
   if (!monthKey || !student?.trim()) return null;
+
+  const feeOption = getMonthlyFeeOption(feeType);
+  if (!feeOption) return null;
 
   const normalizedStudent = student.trim().toLowerCase();
 
   const q = query(
     collection(db, 'invoiceAdjustments'),
-    where('type', '==', 'dcf_supervision'),
-    where('serviceType', '==', 'DCF'),
+    where('type', '==', feeOption.value),
     where('monthKey', '==', monthKey)
   );
 
@@ -576,6 +606,10 @@ export async function findDCFAdjustment(monthKey, student) {
     );
 
   return match || null;
+}
+
+export async function findDCFAdjustment(monthKey, student) {
+  return findMonthlyFeeAdjustment('dcf_supervision', monthKey, student);
 }
 
 export async function deleteAdjustment(adjustmentId) {

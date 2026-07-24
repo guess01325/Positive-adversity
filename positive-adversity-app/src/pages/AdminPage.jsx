@@ -2,15 +2,19 @@ import { useEffect, useMemo, useState } from "react";
 import EntriesByMonth from "../components/EntriesByMonth";
 import { useAuth } from "../contexts/AuthContext";
 import {
-  addDCFAdjustment,
+  addMonthlyFeeAdjustment,
   deleteAdjustment,
   deleteEntry,
   fetchAllEntries,
-  findDCFAdjustment,
+  findMonthlyFeeAdjustment,
   updateEntry,
 } from "../lib/firestore";
 import { exportEntriesPdf } from "../lib/exportReportPdf";
-import { SERVICE_OPTIONS, SERVICE_RATES } from "../lib/constants";
+import {
+  SERVICE_OPTIONS,
+  SERVICE_RATES,
+  getMonthlyFeeOptionsForService,
+} from "../lib/constants";
 import {
   getEntryMonthKey,
   monthKeyFromEntryDate,
@@ -72,6 +76,10 @@ function formatMoney(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
+function normalizeStudentName(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
 export default function AdminPage() {
   const { user, role, isAdmin } = useAuth();
 
@@ -95,9 +103,9 @@ export default function AdminPage() {
   });
   const [savingEdit, setSavingEdit] = useState(false);
 
-  const [dcfAdjustment, setDcfAdjustment] = useState(null);
-  const [loadingAdjustment, setLoadingAdjustment] = useState(false);
-  const [savingAdjustment, setSavingAdjustment] = useState(false);
+  const [monthlyFeeAdjustments, setMonthlyFeeAdjustments] = useState({});
+  const [loadingMonthlyFees, setLoadingMonthlyFees] = useState(false);
+  const [savingMonthlyFees, setSavingMonthlyFees] = useState({});
 
   useEffect(() => {
     async function loadEntries() {
@@ -212,48 +220,116 @@ export default function AdminPage() {
   }, [filteredEntries]);
 
   const normalizedStudentSearch = studentSearch.trim();
-  const canManageDCF =
+  const eligibleMonthlyFees = useMemo(() => {
+    if (serviceFilter === "all") return [];
+    return getMonthlyFeeOptionsForService(serviceFilter);
+  }, [serviceFilter]);
+  const eligibleMonthlyFeeTypes = useMemo(
+    () => eligibleMonthlyFees.map((fee) => fee.value).join("|"),
+    [eligibleMonthlyFees],
+  );
+  const hasSelectedStudentServiceEntry = useMemo(() => {
+    if (
+      selectedMonth === "all" ||
+      serviceFilter === "all" ||
+      !normalizedStudentSearch
+    ) {
+      return false;
+    }
+
+    const studentKey = normalizeStudentName(normalizedStudentSearch);
+
+    return entries.some((entry) => {
+      return (
+        getEntryMonthKey(entry) === selectedMonth &&
+        entry.serviceType === serviceFilter &&
+        normalizeStudentName(entry.student) === studentKey
+      );
+    });
+  }, [entries, normalizedStudentSearch, selectedMonth, serviceFilter]);
+  const canManageMonthlyFees =
     selectedMonth !== "all" &&
     normalizedStudentSearch.length > 0 &&
-    serviceFilter === "DCF";
+    eligibleMonthlyFees.length > 0 &&
+    hasSelectedStudentServiceEntry;
+  const selectedServiceLabel =
+    SERVICE_OPTIONS.find((option) => option.value === serviceFilter)?.label ||
+    "Select an eligible service";
+  const appliedMonthlyFees = useMemo(
+    () =>
+      eligibleMonthlyFees
+        .map((fee) => {
+          const adjustment = monthlyFeeAdjustments[fee.value];
+          if (!adjustment) return null;
+
+          return {
+            label: adjustment.feeName || fee.label,
+            amount: Number(adjustment.amount || 0),
+            monthKey: adjustment.monthKey || selectedMonth,
+          };
+        })
+        .filter(Boolean),
+    [eligibleMonthlyFees, monthlyFeeAdjustments, selectedMonth],
+  );
+  const appliedMonthlyFeeTotal = useMemo(
+    () =>
+      appliedMonthlyFees.reduce(
+        (sum, fee) => sum + Number(fee?.amount || 0),
+        0,
+      ),
+    [appliedMonthlyFees],
+  );
 
   useEffect(() => {
     let isCancelled = false;
 
-    async function loadDCFAdjustment() {
-      if (!canManageDCF) {
-        setDcfAdjustment(null);
+    async function loadMonthlyFeeAdjustments() {
+      if (!canManageMonthlyFees) {
+        setMonthlyFeeAdjustments({});
         return;
       }
 
       try {
-        setLoadingAdjustment(true);
-        const adjustment = await findDCFAdjustment(
-          selectedMonth,
-          normalizedStudentSearch,
+        setLoadingMonthlyFees(true);
+        const adjustments = await Promise.all(
+          eligibleMonthlyFees.map(async (fee) => {
+            const adjustment = await findMonthlyFeeAdjustment(
+              fee.value,
+              selectedMonth,
+              normalizedStudentSearch,
+            );
+
+            return [fee.value, adjustment];
+          }),
         );
 
         if (!isCancelled) {
-          setDcfAdjustment(adjustment);
+          setMonthlyFeeAdjustments(Object.fromEntries(adjustments));
         }
       } catch (error) {
-        console.error("Failed to load DCF adjustment:", error);
+        console.error("Failed to load monthly fee adjustments:", error);
         if (!isCancelled) {
-          setDcfAdjustment(null);
+          setMonthlyFeeAdjustments({});
         }
       } finally {
         if (!isCancelled) {
-          setLoadingAdjustment(false);
+          setLoadingMonthlyFees(false);
         }
       }
     }
 
-    loadDCFAdjustment();
+    loadMonthlyFeeAdjustments();
 
     return () => {
       isCancelled = true;
     };
-  }, [selectedMonth, normalizedStudentSearch, canManageDCF]);
+  }, [
+    selectedMonth,
+    normalizedStudentSearch,
+    eligibleMonthlyFees,
+    eligibleMonthlyFeeTypes,
+    canManageMonthlyFees,
+  ]);
 
   async function handleDownloadPdf() {
     try {
@@ -261,9 +337,7 @@ export default function AdminPage() {
         entries: filteredEntries,
         selectedMonth,
         visibleUserLabel: selectedUserLabel,
-        dcfSupervisionAmount: dcfAdjustment
-          ? Number(dcfAdjustment.amount || 0)
-          : 0,
+        monthlyFees: appliedMonthlyFees,
       });
     } catch (error) {
       console.error("PDF export failed:", error);
@@ -271,84 +345,96 @@ export default function AdminPage() {
     }
   }
 
-  async function handleAddDCFAdjustment() {
-    if (!canManageDCF) {
+  async function handleAddMonthlyFee(fee) {
+    if (!canManageMonthlyFees) {
       alert(
-        "Select DCF, choose a specific month, and enter a student name first.",
+        "Select an eligible service, choose a specific month, and enter a student with that service first.",
       );
       return;
     }
 
     try {
-      setSavingAdjustment(true);
+      setSavingMonthlyFees((current) => ({ ...current, [fee.value]: true }));
 
-      const existing = await findDCFAdjustment(
+      const existing = await findMonthlyFeeAdjustment(
+        fee.value,
         selectedMonth,
         normalizedStudentSearch,
       );
 
       if (existing) {
-        setDcfAdjustment(existing);
-        alert("DCF supervision is already applied for this student and month.");
+        setMonthlyFeeAdjustments((current) => ({
+          ...current,
+          [fee.value]: existing,
+        }));
+        alert(`${fee.label} is already applied for this student and month.`);
         return;
       }
 
-      await addDCFAdjustment({
+      await addMonthlyFeeAdjustment({
+        feeType: fee.value,
         monthKey: selectedMonth,
         student: normalizedStudentSearch,
         createdBy: user?.email || "",
       });
 
-      const refreshed = await findDCFAdjustment(
+      const refreshed = await findMonthlyFeeAdjustment(
+        fee.value,
         selectedMonth,
         normalizedStudentSearch,
       );
 
-      setDcfAdjustment(refreshed || null);
+      setMonthlyFeeAdjustments((current) => ({
+        ...current,
+        [fee.value]: refreshed || null,
+      }));
 
       if (refreshed) {
-        alert("DCF supervision fee applied.");
+        alert(`${fee.label} applied.`);
       } else {
-        alert("DCF fee may have saved, but it did not refresh correctly.");
+        alert(`${fee.label} may have saved, but it did not refresh correctly.`);
       }
     } catch (error) {
-      console.error("Failed to add DCF adjustment:", error);
-      alert(error?.message || "Failed to add DCF supervision fee.");
+      console.error("Failed to add monthly fee adjustment:", error);
+      alert(error?.message || `Failed to add ${fee.label}.`);
     } finally {
-      setSavingAdjustment(false);
+      setSavingMonthlyFees((current) => ({ ...current, [fee.value]: false }));
     }
   }
 
-  async function handleRemoveDCFAdjustment() {
-    if (!dcfAdjustment?.id) return;
+  async function handleRemoveMonthlyFee(fee) {
+    const adjustment = monthlyFeeAdjustments[fee.value];
+    if (!adjustment?.id) return;
 
-    const confirmed = window.confirm(
-      "Remove the DCF supervision fee for this student and month?",
-    );
+    const confirmed = window.confirm(`Remove ${fee.label} for this student and month?`);
     if (!confirmed) return;
 
     try {
-      setSavingAdjustment(true);
+      setSavingMonthlyFees((current) => ({ ...current, [fee.value]: true }));
 
-      await deleteAdjustment(dcfAdjustment.id);
+      await deleteAdjustment(adjustment.id);
 
-      const refreshed = await findDCFAdjustment(
+      const refreshed = await findMonthlyFeeAdjustment(
+        fee.value,
         selectedMonth,
         normalizedStudentSearch,
       );
 
-      setDcfAdjustment(refreshed || null);
+      setMonthlyFeeAdjustments((current) => ({
+        ...current,
+        [fee.value]: refreshed || null,
+      }));
 
       if (!refreshed) {
-        alert("DCF supervision fee removed.");
+        alert(`${fee.label} removed.`);
       } else {
-        alert("DCF fee may still exist for this selection.");
+        alert(`${fee.label} may still exist for this selection.`);
       }
     } catch (error) {
-      console.error("Failed to remove DCF adjustment:", error);
-      alert(error?.message || "Failed to remove DCF supervision fee.");
+      console.error("Failed to remove monthly fee adjustment:", error);
+      alert(error?.message || `Failed to remove ${fee.label}.`);
     } finally {
-      setSavingAdjustment(false);
+      setSavingMonthlyFees((current) => ({ ...current, [fee.value]: false }));
     }
   }
 
@@ -766,109 +852,130 @@ export default function AdminPage() {
             ))}
           </select>
         </div>
-        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-slate-900">
-                DCF Supervision Fee
-              </p>
-              <p className="mt-1 text-sm text-slate-600">
-                Apply one $11.25 supervision charge for the selected month and
-                student.
-              </p>
+        {eligibleMonthlyFees.length > 0 && (
+          <div className="mt-4 space-y-3">
+            {eligibleMonthlyFees.map((fee) => {
+              const adjustment = monthlyFeeAdjustments[fee.value] || null;
+              const isSaving = savingMonthlyFees[fee.value] === true;
 
-              <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full bg-white px-3 py-1 text-slate-600 ring-1 ring-slate-200">
-                  Service:{" "}
-                  <span className="font-medium">
-                    {serviceFilter === "all" ? "Select DCF" : serviceFilter}
-                  </span>
-                </span>
-
-                <span className="rounded-full bg-white px-3 py-1 text-slate-600 ring-1 ring-slate-200">
-                  Month:{" "}
-                  <span className="font-medium">
-                    {selectedMonth === "all" ? "Select a month" : selectedMonth}
-                  </span>
-                </span>
-
-                <span className="rounded-full bg-white px-3 py-1 text-slate-600 ring-1 ring-slate-200">
-                  Student:{" "}
-                  <span className="font-medium">
-                    {normalizedStudentSearch || "Enter a student name"}
-                  </span>
-                </span>
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    loadingAdjustment
-                      ? "bg-amber-100 text-amber-700"
-                      : dcfAdjustment
-                      ? "bg-green-100 text-green-700"
-                      : "bg-slate-200 text-slate-700"
-                  }`}
+              return (
+                <div
+                  key={fee.value}
+                  className="rounded-xl border border-slate-200 bg-slate-50 p-4"
                 >
-                  {loadingAdjustment
-                    ? "Status: Checking..."
-                    : dcfAdjustment
-                    ? "Status: Active"
-                    : "Status: Not Applied"}
-                </span>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {fee.label}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        Apply one {formatMoney(fee.amount)} charge for the
+                        selected month and student.
+                      </p>
 
-                <span className="text-sm text-slate-600">
-                  Fee Amount: <span className="font-medium">$11.25</span>
-                </span>
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                        <span className="rounded-full bg-white px-3 py-1 text-slate-600 ring-1 ring-slate-200">
+                          Service:{" "}
+                          <span className="font-medium">
+                            {selectedServiceLabel}
+                          </span>
+                        </span>
 
-                {dcfAdjustment && (
-                  <span className="text-sm font-medium text-green-700">
-                    Applied
-                  </span>
-                )}
-              </div>
+                        <span className="rounded-full bg-white px-3 py-1 text-slate-600 ring-1 ring-slate-200">
+                          Month:{" "}
+                          <span className="font-medium">
+                            {selectedMonth === "all"
+                              ? "Select a month"
+                              : selectedMonth}
+                          </span>
+                        </span>
 
-              {dcfAdjustment && (
-                <div className="mt-3 rounded-lg bg-white px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">
-                  <span className="font-medium">Matched Record:</span>{" "}
-                  {dcfAdjustment.student} • {dcfAdjustment.monthKey} •{" "}
-                  {dcfAdjustment.serviceType || "DCF"}
+                        <span className="rounded-full bg-white px-3 py-1 text-slate-600 ring-1 ring-slate-200">
+                          Student:{" "}
+                          <span className="font-medium">
+                            {normalizedStudentSearch || "Enter a student name"}
+                          </span>
+                        </span>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                            loadingMonthlyFees
+                              ? "bg-amber-100 text-amber-700"
+                              : adjustment
+                              ? "bg-green-100 text-green-700"
+                              : "bg-slate-200 text-slate-700"
+                          }`}
+                        >
+                          {loadingMonthlyFees
+                            ? "Status: Checking..."
+                            : adjustment
+                            ? "Status: Active"
+                            : "Status: Not Applied"}
+                        </span>
+
+                        <span className="text-sm text-slate-600">
+                          Fee Amount:{" "}
+                          <span className="font-medium">
+                            {formatMoney(fee.amount)}
+                          </span>
+                        </span>
+
+                        {adjustment && (
+                          <span className="text-sm font-medium text-green-700">
+                            Applied
+                          </span>
+                        )}
+                      </div>
+
+                      {adjustment && (
+                        <div className="mt-3 rounded-lg bg-white px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">
+                          <span className="font-medium">Matched Record:</span>{" "}
+                          {adjustment.student} • {adjustment.monthKey} •{" "}
+                          {adjustment.feeName || fee.label}
+                        </div>
+                      )}
+
+                      {!canManageMonthlyFees && (
+                        <p className="mt-3 text-sm text-amber-700">
+                          Select a specific month and enter a student with this
+                          service to manage this fee.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleAddMonthlyFee(fee)}
+                        disabled={
+                          !canManageMonthlyFees || !!adjustment || isSaving
+                        }
+                        className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isSaving && !adjustment
+                          ? "Applying..."
+                          : `Apply ${fee.label} (${formatMoney(fee.amount)})`}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMonthlyFee(fee)}
+                        disabled={!adjustment || isSaving}
+                        className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isSaving && adjustment
+                          ? "Removing..."
+                          : `Remove ${fee.label}`}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              )}
-
-              {!canManageDCF && (
-                <p className="mt-3 text-sm text-amber-700">
-                  Choose <span className="font-medium">DCF</span>, select a
-                  specific month, and enter a student name to manage this fee.
-                </p>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={handleAddDCFAdjustment}
-                disabled={!canManageDCF || !!dcfAdjustment || savingAdjustment}
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {savingAdjustment && !dcfAdjustment
-                  ? "Applying..."
-                  : "Apply DCF Supervision ($11.25)"}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleRemoveDCFAdjustment}
-                disabled={!dcfAdjustment || savingAdjustment}
-                className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {savingAdjustment && dcfAdjustment
-                  ? "Removing..."
-                  : "Remove DCF Supervision"}
-              </button>
-            </div>
+              );
+            })}
           </div>
-        </div>
+        )}
 
         <div className="mt-4 grid gap-3 md:grid-cols-4">
           <div className="rounded-xl bg-slate-50 p-4">
@@ -903,7 +1010,7 @@ export default function AdminPage() {
               Internal Total
             </p>
             <p className="mt-1 text-xl font-bold text-slate-900">
-              {formatMoney(totals.internalTotal)}
+              {formatMoney(totals.internalTotal + appliedMonthlyFeeTotal)}
             </p>
           </div>
         </div>
@@ -932,6 +1039,7 @@ export default function AdminPage() {
           showInternalTotals={true}
           showAdminActions={true}
           showTimes={true}
+          monthlyFees={appliedMonthlyFees}
           onEdit={handleEdit}
           onDelete={handleDelete}
           onPaymentConfirmedToggle={handlePaymentConfirmedToggle}

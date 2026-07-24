@@ -75,6 +75,7 @@ function truncateText(text, maxLength = 180) {
 
 export default function EntriesByMonth({
   entries = [],
+  monthlyFees = [],
   emptyMessage = "No entries found.",
   showStudent = false,
   showInternalTotals = false,
@@ -103,6 +104,9 @@ export default function EntriesByMonth({
     <>
       <div className="space-y-6">
         {groupedEntries.map(([month, monthEntries]) => {
+          const monthlyFeeTotal = monthlyFees
+            .filter((fee) => !fee?.monthKey || fee.monthKey === month)
+            .reduce((sum, fee) => sum + Number(fee?.amount || 0), 0);
           const monthTotals = monthEntries.reduce(
             (acc, entry) => {
               const hours = Number(entry.hours || 0);
@@ -118,7 +122,7 @@ export default function EntriesByMonth({
             {
               hours: 0,
               totalPay: 0,
-              internalTotal: 0,
+              internalTotal: monthlyFeeTotal,
             },
           );
 

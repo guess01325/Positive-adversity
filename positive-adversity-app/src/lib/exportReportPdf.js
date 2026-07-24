@@ -254,6 +254,7 @@ export async function exportEntriesPdf({
   entries = [],
   selectedMonth = "all",
   visibleUserLabel = "All Users",
+  monthlyFees = [],
   dcfSupervisionAmount = 0,
 }) {
   const doc = new jsPDF({
@@ -293,8 +294,23 @@ export async function exportEntriesPdf({
     { entries: 0, hours: 0, internalTotal: 0 }
   );
 
-  const finalInternalTotal =
-    totals.internalTotal + Number(dcfSupervisionAmount || 0);
+  const appliedMonthlyFees = monthlyFees.length
+    ? monthlyFees
+    : Number(dcfSupervisionAmount || 0) > 0
+    ? [
+        {
+          label: "Supervision Fee",
+          amount: Number(dcfSupervisionAmount || 0),
+        },
+      ]
+    : [];
+
+  const monthlyFeeTotal = appliedMonthlyFees.reduce(
+    (sum, fee) => sum + Number(fee?.amount || 0),
+    0,
+  );
+
+  const finalInternalTotal = totals.internalTotal + monthlyFeeTotal;
 
   const studentGroups = groupEntriesByStudent(reportEntries);
 
@@ -351,11 +367,17 @@ export async function exportEntriesPdf({
 
   doc.text(`Entries: ${totals.entries}`, 10, summaryY);
   doc.text(`Hours: ${totals.hours.toFixed(2)}`, 70, summaryY);
-  doc.text(
-    `DCF Supervision: ${formatCurrency(dcfSupervisionAmount)}`,
-    130,
-    summaryY
-  );
+
+  if (appliedMonthlyFees.length) {
+    const feeSummary = appliedMonthlyFees
+      .map((fee) => `${fee.label}: ${formatCurrency(fee.amount)}`)
+      .join(" | ");
+
+    doc.text(feeSummary, 130, summaryY, {
+      maxWidth: doc.internal.pageSize.getWidth() - 205,
+    });
+  }
+
   doc.text(
     `Internal Total: ${formatCurrency(finalInternalTotal)}`,
     doc.internal.pageSize.getWidth() - 10,
