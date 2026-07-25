@@ -1,7 +1,7 @@
 const { HttpsError } = require("firebase-functions/v2/https");
 const { cleanString } = require("../utils/strings");
 
-const PAYMENT_OPTIONS = new Set(["cashapp", "venmo", "paypal", "stripe"]);
+const PAYMENT_OPTIONS = new Set(["stripe"]);
 const MAX_ITEMS_PER_ORDER = 30;
 const MAX_QUANTITY_PER_ITEM = 20;
 

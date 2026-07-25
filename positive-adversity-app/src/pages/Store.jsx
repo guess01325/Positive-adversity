@@ -40,8 +40,6 @@ const initialCheckoutForm = {
   state: "",
   zip: "",
   paymentOption: "",
-  paymentCompleted: false,
-  paymentReferenceId: "",
 };
 
 function formatUsPhoneNumber(value) {
@@ -60,21 +58,6 @@ function formatUsPhoneNumber(value) {
 
 const paymentMethods = [
   {
-    value: "cashapp",
-    label: "Cash App",
-    paymentUrl: "https://cash.app/$AllanChaney",
-  },
-  {
-    value: "venmo",
-    label: "Venmo",
-    paymentUrl: "https://venmo.com/u/AllanVChaney",
-  },
-  {
-    value: "paypal",
-    label: "PayPal",
-    paymentUrl: "https://paypal.me/AVCstoreCT",
-  },
-  {
     value: "stripe",
     label: "Card, Apple Pay, or Google Pay",
   },
@@ -87,7 +70,6 @@ export default function Store() {
   const [selectedSizes, setSelectedSizes] = useState({});
   const [cartItems, setCartItems] = useState([]);
   const [checkoutForm, setCheckoutForm] = useState(initialCheckoutForm);
-  const [paymentStarted, setPaymentStarted] = useState(false);
   const [pendingStripeOrderId, setPendingStripeOrderId] = useState("");
   const [checkoutAttemptId, setCheckoutAttemptId] = useState("");
   const [pendingCartFingerprint, setPendingCartFingerprint] = useState("");
@@ -139,11 +121,11 @@ export default function Store() {
         setCheckoutForm({
           ...initialCheckoutForm,
           ...draft.checkoutForm,
-          paymentCompleted: Boolean(draft.checkoutForm.paymentCompleted),
+          paymentOption:
+            draft.checkoutForm.paymentOption === "stripe" ? "stripe" : "",
         });
       }
 
-      setPaymentStarted(Boolean(draft.paymentStarted));
       setPendingStripeOrderId(draft.pendingStripeOrderId || "");
       setCheckoutAttemptId(draft.checkoutAttemptId || "");
       setPendingCartFingerprint(draft.cartFingerprint || "");
@@ -161,7 +143,6 @@ export default function Store() {
   }, [
     cartItems,
     checkoutForm,
-    paymentStarted,
     pendingStripeOrderId,
     checkoutAttemptId,
     pendingCartFingerprint,
@@ -256,21 +237,15 @@ export default function Store() {
 
   const isStripeCheckout = checkoutForm.paymentOption === "stripe";
 
-  const canContinueToPayment =
-    cartItems.length > 0 && hasRequiredCheckoutFields && selectedPaymentMethod;
-
   const canSubmitOrder =
     cartItems.length > 0 &&
     hasRequiredCheckoutFields &&
     selectedPaymentMethod &&
-    (isStripeCheckout ||
-      (checkoutForm.paymentCompleted &&
-        checkoutForm.paymentReferenceId.trim().length > 0));
+    isStripeCheckout;
 
   function saveCheckoutDraft(
     draftCartItems = cartItems,
     draftCheckoutForm = checkoutForm,
-    draftPaymentStarted = paymentStarted,
     draftPendingStripeOrderId = pendingStripeOrderId,
     draftCheckoutAttemptId = checkoutAttemptId,
     draftCartFingerprint = pendingCartFingerprint,
@@ -279,7 +254,6 @@ export default function Store() {
       saveStoreCheckoutDraft({
         cartItems: draftCartItems,
         checkoutForm: draftCheckoutForm,
-        paymentStarted: draftPaymentStarted,
         pendingStripeOrderId: draftPendingStripeOrderId,
         checkoutAttemptId: draftCheckoutAttemptId,
         cartFingerprint: draftCartFingerprint || getCartFingerprint(draftCartItems),
@@ -464,62 +438,13 @@ export default function Store() {
   }
 
   function handleCheckoutChange(event) {
-    const { checked, name, type, value } = event.target;
+    const { name, value } = event.target;
     const nextValue = name === "phone" ? formatUsPhoneNumber(value) : value;
 
     setCheckoutForm((currentForm) => ({
       ...currentForm,
-      [name]: type === "checkbox" ? checked : nextValue,
-      ...(name === "paymentOption"
-        ? {
-            paymentCompleted: false,
-            paymentReferenceId: "",
-          }
-        : {}),
+      [name]: nextValue,
     }));
-
-    if (name === "paymentOption") {
-      setPaymentStarted(false);
-      clearPendingStripeAttempt();
-    }
-  }
-
-  function handlePaymentContinue() {
-    setMessage("");
-    setError("");
-
-    if (!selectedPaymentMethod) {
-      setError("Select a payment method before continuing.");
-      return;
-    }
-
-    if (cartItems.length === 0) {
-      setError("Add at least one item to your cart before continuing.");
-      return;
-    }
-
-    if (!hasRequiredCheckoutFields) {
-      setError("Fill out the required contact and shipping fields first.");
-      return;
-    }
-
-    if (!selectedPaymentMethod.paymentUrl) {
-      setError("Submit the order to continue to secure Stripe checkout.");
-      return;
-    }
-
-    saveCheckoutDraft(cartItems, checkoutForm, true);
-    setPaymentStarted(true);
-
-    const paymentWindow = window.open(
-      selectedPaymentMethod.paymentUrl,
-      "_blank",
-      "noopener,noreferrer",
-    );
-
-    if (paymentWindow) {
-      paymentWindow.opener = null;
-    }
   }
 
   function getCheckoutErrorMessage(error, step, orderId = "") {
@@ -628,7 +553,7 @@ export default function Store() {
         },
         payment: {
           option: checkoutForm.paymentOption,
-          referenceId: checkoutForm.paymentReferenceId.trim(),
+          referenceId: "",
         },
         items: cartItems,
         total: cartTotal,
@@ -641,7 +566,6 @@ export default function Store() {
         saveCheckoutDraft(
           cartItems,
           checkoutForm,
-          paymentStarted,
           createdOrderId,
           nextCheckoutAttemptId,
           currentCartFingerprint,
@@ -664,7 +588,6 @@ export default function Store() {
       clearStoreCheckoutDraft();
       setCheckoutForm(initialCheckoutForm);
       setCartItems([]);
-      setPaymentStarted(false);
       clearPendingStripeAttempt();
       setMessage(`Order submitted. Order ID: ${createdOrderId}`);
     } catch (orderError) {
@@ -678,7 +601,7 @@ export default function Store() {
       });
       if (isStripeCheckout && submitStep === "submitStoreOrder") {
         clearPendingStripeAttempt();
-        saveCheckoutDraft(cartItems, checkoutForm, paymentStarted, "", "", "");
+        saveCheckoutDraft(cartItems, checkoutForm, "", "", "");
       }
       setError(getCheckoutErrorMessage(orderError, submitStep, createdOrderId));
     } finally {
@@ -1213,44 +1136,6 @@ export default function Store() {
                   ))}
                 </select>
               </div>
-
-              {selectedPaymentMethod?.paymentUrl ? (
-                <button
-                  type="button"
-                  onClick={handlePaymentContinue}
-                  disabled={!canContinueToPayment}
-                  className="w-full rounded-full bg-slate-950 px-4 py-3 font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Continue to {selectedPaymentMethod.label}
-                </button>
-              ) : null}
-
-              {paymentStarted ? (
-                <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <label className="flex items-start gap-3 text-sm font-black text-slate-800">
-                    <input
-                      type="checkbox"
-                      name="paymentCompleted"
-                      checked={checkoutForm.paymentCompleted}
-                      onChange={handleCheckoutChange}
-                      className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-950"
-                    />
-                    <span>I have completed payment</span>
-                  </label>
-
-                  <div>
-                    <label>Payment username or confirmation ID</label>
-                    <input
-                      type="text"
-                      name="paymentReferenceId"
-                      value={checkoutForm.paymentReferenceId}
-                      onChange={handleCheckoutChange}
-                      placeholder="Example: @yourvenmo, $yourcashapp, PayPal email, or transaction ID"
-                      required
-                    />
-                  </div>
-                </div>
-              ) : null}
 
               {error ? (
                 <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">

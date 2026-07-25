@@ -10,8 +10,6 @@ const emptyCheckoutForm = {
   state: "",
   zip: "",
   paymentOption: "",
-  paymentCompleted: false,
-  paymentReferenceId: "",
 };
 
 function getStorage() {
@@ -52,11 +50,9 @@ export function getCartFingerprint(cartItems = []) {
 export function isCheckoutDraftEmpty(
   draftCartItems = [],
   draftCheckoutForm = emptyCheckoutForm,
-  draftPaymentStarted = false,
 ) {
   return (
     draftCartItems.length === 0 &&
-    !draftPaymentStarted &&
     Object.entries(emptyCheckoutForm).every(
       ([key, value]) => draftCheckoutForm[key] === value,
     )
@@ -82,9 +78,7 @@ export function saveStoreCheckoutDraft(draft) {
     draft.checkoutForm && typeof draft.checkoutForm === "object"
       ? { ...emptyCheckoutForm, ...draft.checkoutForm }
       : emptyCheckoutForm;
-  const paymentStarted = Boolean(draft.paymentStarted);
-
-  if (isCheckoutDraftEmpty(cartItems, checkoutForm, paymentStarted)) {
+  if (isCheckoutDraftEmpty(cartItems, checkoutForm)) {
     storage.removeItem(storeCheckoutDraftStorageKey);
     return;
   }
@@ -95,7 +89,6 @@ export function saveStoreCheckoutDraft(draft) {
       ...draft,
       cartItems,
       checkoutForm,
-      paymentStarted,
       cartFingerprint: draft.cartFingerprint || getCartFingerprint(cartItems),
     }),
   );

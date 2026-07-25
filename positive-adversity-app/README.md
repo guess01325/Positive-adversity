@@ -81,7 +81,7 @@ You can include multiple emails separated by commas.
     "zip": "01604"
   },
   "payment": {
-    "option": "paypal",
+    "option": "stripe",
     "referenceId": "ABC123"
   },
   "items": [],

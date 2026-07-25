@@ -560,9 +560,6 @@ export default function AdminOrderPage() {
                   className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-normal"
                 >
                   <option value="">Select payment method</option>
-                  <option value="paypal">PayPal</option>
-                  <option value="venmo">Venmo</option>
-                  <option value="cashapp">Cash App</option>
                   <option value="stripe">Stripe</option>
                 </select>
               </label>
