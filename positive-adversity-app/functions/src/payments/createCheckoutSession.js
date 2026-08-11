@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { db, FieldValue } = require("../config/firebase");
+const { FLAT_RATE_SHIPPING_AMOUNT } = require("../config/shipping");
 const {
   stripeSecretKey,
   getStripeClient,
@@ -88,6 +89,33 @@ const createCheckoutSession = onCall(
           quantity,
         };
       });
+
+      const shippingAmount = dollarsToCents(order.shippingAmount || 0);
+
+      if (order.fulfillment?.method === "flat_rate") {
+        if (shippingAmount !== dollarsToCents(FLAT_RATE_SHIPPING_AMOUNT)) {
+          throw new HttpsError(
+            "failed-precondition",
+            "This order has an invalid flat-rate shipping amount.",
+          );
+        }
+
+        lineItems.push({
+          price_data: {
+            currency: CURRENCY,
+            product_data: {
+              name: "$17 Flat Rate Shipping",
+            },
+            unit_amount: shippingAmount,
+          },
+          quantity: 1,
+        });
+      } else if (order.fulfillment?.method !== "pickup" || shippingAmount !== 0) {
+        throw new HttpsError(
+          "failed-precondition",
+          "This order has an invalid fulfillment method or shipping amount.",
+        );
+      }
 
       const baseUrl = getCheckoutSiteUrl();
       console.log("[store checkout] createCheckoutSession:stripeRequest", {

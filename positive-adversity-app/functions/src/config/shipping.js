@@ -1,0 +1,5 @@
+const FLAT_RATE_SHIPPING_AMOUNT = 17;
+
+module.exports = {
+  FLAT_RATE_SHIPPING_AMOUNT,
+};
