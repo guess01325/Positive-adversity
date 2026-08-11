@@ -9,6 +9,7 @@ const emptyCheckoutForm = {
   city: "",
   state: "",
   zip: "",
+  fulfillmentMethod: "",
   paymentOption: "",
 };
 

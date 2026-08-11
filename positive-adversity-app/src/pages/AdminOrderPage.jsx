@@ -32,6 +32,7 @@ const initialEditForm = {
   paymentReferenceId: "",
   status: "pending",
   paymentConfirmed: false,
+  shippingAmount: 0,
   items: [],
 };
 
@@ -72,6 +73,7 @@ function toEditForm(order) {
     paymentReferenceId: order.payment?.referenceId || "",
     status: order.status || "pending",
     paymentConfirmed: Boolean(order.paymentConfirmed),
+    shippingAmount: Number(order.shippingAmount || 0),
     items: (order.items || []).map((item) => ({
       name: item.name || "",
       size: item.size || "",
@@ -156,9 +158,9 @@ export default function AdminOrderPage() {
       editForm.items.reduce(
         (total, item) =>
           total + Number(item.price || 0) * Number(item.quantity || 0),
-        0,
+        Number(editForm.shippingAmount || 0),
       ),
-    [editForm.items],
+    [editForm.items, editForm.shippingAmount],
   );
 
   function handleEditOrder(order) {
@@ -288,10 +290,11 @@ export default function AdminOrderPage() {
         throw new Error("Order must have at least one item.");
       }
 
-      const updatedTotal = cleanedItems.reduce(
+      const updatedSubtotal = cleanedItems.reduce(
         (total, item) => total + item.price * item.quantity,
         0,
       );
+      const updatedTotal = updatedSubtotal + Number(editForm.shippingAmount || 0);
 
       await updateOrder(editingOrderId, {
         customer: {
@@ -313,6 +316,7 @@ export default function AdminOrderPage() {
         status: editForm.status,
         paymentConfirmed: editForm.paymentConfirmed,
         items: cleanedItems,
+        subtotal: updatedSubtotal,
         total: updatedTotal,
       });
 
@@ -796,16 +800,37 @@ export default function AdminOrderPage() {
 
               <div className="mt-4 grid gap-4 lg:grid-cols-3">
                 <div className="rounded-xl bg-slate-50 p-4">
-                  <p className="text-sm font-bold text-slate-900">Shipping</p>
-                  <p className="mt-2 text-sm text-slate-600">
-                    {order.shippingAddress?.streetAddress || "No street address"}
-                    {order.shippingAddress?.apartment
-                      ? `, ${order.shippingAddress.apartment}`
-                      : ""}
+                  <p className="text-sm font-bold text-slate-900">Fulfillment</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-700">
+                    {order.fulfillment?.method === "flat_rate"
+                      ? "$17 Flat Rate Shipping"
+                      : order.fulfillment?.method === "pickup"
+                        ? "Local Pickup"
+                        : order.fulfillment?.label || "Not specified"}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Merchandise: {formatCurrency(
+                      order.subtotal ??
+                        Number(order.total || 0) - Number(order.shippingAmount || 0),
+                    )}
                     <br />
-                    {order.shippingAddress?.city || "No city"},{" "}
-                    {order.shippingAddress?.state || "No state"}{" "}
-                    {order.shippingAddress?.zip || ""}
+                    Shipping: {formatCurrency(order.shippingAmount || 0)}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-600">
+                    {order.fulfillment?.method === "pickup" ? (
+                      "Hold for local pickup"
+                    ) : (
+                      <>
+                        {order.shippingAddress?.streetAddress || "No street address"}
+                        {order.shippingAddress?.apartment
+                          ? `, ${order.shippingAddress.apartment}`
+                          : ""}
+                        <br />
+                        {order.shippingAddress?.city || "No city"},{" "}
+                        {order.shippingAddress?.state || "No state"}{" "}
+                        {order.shippingAddress?.zip || ""}
+                      </>
+                    )}
                   </p>
                 </div>
 

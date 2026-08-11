@@ -39,6 +39,7 @@ const initialCheckoutForm = {
   city: "",
   state: "",
   zip: "",
+  fulfillmentMethod: "",
   paymentOption: "",
 };
 
@@ -62,6 +63,8 @@ const paymentMethods = [
     label: "Card, Apple Pay, or Google Pay",
   },
 ];
+
+const FLAT_RATE_SHIPPING_AMOUNT = 17;
 
 export default function Store() {
   const [products, setProducts] = useState(storeProducts);
@@ -205,6 +208,12 @@ export default function Store() {
     [cartItems],
   );
 
+  const shippingAmount =
+    checkoutForm.fulfillmentMethod === "flat_rate"
+      ? FLAT_RATE_SHIPPING_AMOUNT
+      : 0;
+  const orderTotal = cartTotal + shippingAmount;
+
   const selectedPaymentMethod = useMemo(
     () =>
       paymentMethods.find(
@@ -214,19 +223,29 @@ export default function Store() {
   );
 
   const hasRequiredCheckoutFields = useMemo(
-    () =>
-      [
+    () => {
+      const requiredFields = [
         checkoutForm.fullName,
         checkoutForm.email,
         checkoutForm.phone,
-        checkoutForm.streetAddress,
-        checkoutForm.city,
-        checkoutForm.state,
-        checkoutForm.zip,
-      ].every((value) => value.trim().length > 0),
+        checkoutForm.fulfillmentMethod,
+      ];
+
+      if (checkoutForm.fulfillmentMethod !== "pickup") {
+        requiredFields.push(
+          checkoutForm.streetAddress,
+          checkoutForm.city,
+          checkoutForm.state,
+          checkoutForm.zip,
+        );
+      }
+
+      return requiredFields.every((value) => value.trim().length > 0);
+    },
     [
       checkoutForm.city,
       checkoutForm.email,
+      checkoutForm.fulfillmentMethod,
       checkoutForm.fullName,
       checkoutForm.phone,
       checkoutForm.state,
@@ -236,6 +255,7 @@ export default function Store() {
   );
 
   const isStripeCheckout = checkoutForm.paymentOption === "stripe";
+  const isLocalPickup = checkoutForm.fulfillmentMethod === "pickup";
 
   const canSubmitOrder =
     cartItems.length > 0 &&
@@ -441,6 +461,13 @@ export default function Store() {
     const { name, value } = event.target;
     const nextValue = name === "phone" ? formatUsPhoneNumber(value) : value;
 
+    if (
+      name === "fulfillmentMethod" &&
+      value !== checkoutForm.fulfillmentMethod
+    ) {
+      clearPendingStripeAttempt();
+    }
+
     setCheckoutForm((currentForm) => ({
       ...currentForm,
       [name]: nextValue,
@@ -550,6 +577,9 @@ export default function Store() {
           city: checkoutForm.city.trim(),
           state: checkoutForm.state.trim(),
           zip: checkoutForm.zip.trim(),
+        },
+        fulfillment: {
+          method: checkoutForm.fulfillmentMethod,
         },
         payment: {
           option: checkoutForm.paymentOption,
@@ -1015,12 +1045,65 @@ export default function Store() {
           </div>
 
           <div className="mt-5 border-t border-slate-200 pt-4">
-            <div className="flex items-center justify-between">
-              <p className="text-lg font-black">Total</p>
-              <p className="text-3xl font-black">${cartTotal}</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm font-bold text-slate-600">
+                <p>Merchandise subtotal</p>
+                <p>${cartTotal}</p>
+              </div>
+              <div className="flex items-center justify-between text-sm font-bold text-slate-600">
+                <p>Shipping</p>
+                <p>${shippingAmount}</p>
+              </div>
+              <div className="flex items-center justify-between border-t border-slate-200 pt-2">
+                <p className="text-lg font-black">Total</p>
+                <p className="text-3xl font-black">${orderTotal}</p>
+              </div>
             </div>
 
             <form className="mt-5 space-y-4" onSubmit={handleSubmitOrder}>
+              <div>
+                <fieldset>
+                  <legend className="text-sm font-medium text-slate-700">
+                    Fulfillment Method
+                  </legend>
+                  <div className="mt-2 space-y-2">
+                    <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3">
+                      <input
+                        type="radio"
+                        name="fulfillmentMethod"
+                        value="pickup"
+                        checked={checkoutForm.fulfillmentMethod === "pickup"}
+                        onChange={handleCheckoutChange}
+                        required
+                        className="mt-1 h-4 w-4 shrink-0 rounded-full p-0 shadow-none"
+                      />
+                      <span>
+                        <span className="block font-black">Local pickup</span>
+                        <span className="block text-xs font-semibold text-slate-500">
+                          No shipping address or shipping charge required.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3">
+                      <input
+                        type="radio"
+                        name="fulfillmentMethod"
+                        value="flat_rate"
+                        checked={checkoutForm.fulfillmentMethod === "flat_rate"}
+                        onChange={handleCheckoutChange}
+                        className="mt-1 h-4 w-4 shrink-0 rounded-full p-0 shadow-none"
+                      />
+                      <span>
+                        <span className="block font-black">$17 Flat Rate Shipping</span>
+                        <span className="block text-xs font-semibold text-slate-500">
+                          A $17 shipping charge is added once per order.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                </fieldset>
+              </div>
+
               <div>
                 <label>Full Name</label>
                 <input
@@ -1065,7 +1148,7 @@ export default function Store() {
                   value={checkoutForm.streetAddress}
                   onChange={handleCheckoutChange}
                   placeholder="Street address"
-                  required
+                  required={!isLocalPickup}
                 />
               </div>
 
@@ -1089,7 +1172,7 @@ export default function Store() {
                     value={checkoutForm.city}
                     onChange={handleCheckoutChange}
                     placeholder="City"
-                    required
+                    required={!isLocalPickup}
                   />
                 </div>
               </div>
@@ -1103,7 +1186,7 @@ export default function Store() {
                     value={checkoutForm.state}
                     onChange={handleCheckoutChange}
                     placeholder="CT"
-                    required
+                    required={!isLocalPickup}
                   />
                 </div>
 
@@ -1115,7 +1198,7 @@ export default function Store() {
                     value={checkoutForm.zip}
                     onChange={handleCheckoutChange}
                     placeholder="06320"
-                    required
+                    required={!isLocalPickup}
                   />
                 </div>
               </div>
