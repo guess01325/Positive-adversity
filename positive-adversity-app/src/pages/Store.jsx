@@ -421,6 +421,12 @@ export default function Store() {
     });
   }
 
+  function scrollToCart() {
+    document
+      .getElementById("cart")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function handleUpdateQuantity(itemName, itemSize, change) {
     setError("");
     clearPendingStripeAttempt();
@@ -913,6 +919,15 @@ export default function Store() {
                     <h3 className="mt-2 min-h-14 text-xl font-black leading-7 text-white">
                       {product.name}
                     </h3>
+                    <p className="mt-3 text-sm font-semibold leading-6 text-slate-300">
+                      Text if you got an offer:{" "}
+                      <a
+                        href="sms:8606256656"
+                        className="font-black text-[#00a8ff] underline decoration-[#00a8ff]/50 underline-offset-4 hover:text-[#35bcff]"
+                      >
+                        8606256656
+                      </a>
+                    </p>
 
                     {productSizes.length > 0 ? (
                       <div className="mt-4">
@@ -965,7 +980,10 @@ export default function Store() {
           </div>
         </div>
 
-        <aside className="h-fit rounded-[1.5rem] border border-white/10 bg-white p-5 text-slate-950 shadow-2xl shadow-black/30 lg:sticky lg:top-28">
+        <aside
+          id="cart"
+          className="h-fit scroll-mt-24 rounded-[1.5rem] border border-white/10 bg-white p-5 text-slate-950 shadow-2xl shadow-black/30 lg:sticky lg:top-28"
+        >
           <div className="border-b border-slate-200 pb-4">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -1247,6 +1265,18 @@ export default function Store() {
           </div>
         </aside>
       </section>
+
+      <button
+        type="button"
+        onClick={scrollToCart}
+        aria-label={`View cart, ${cartCount} ${cartCount === 1 ? "item" : "items"}`}
+        className="fixed bottom-5 right-5 z-30 inline-flex items-center gap-3 rounded-full bg-[#1ed760] px-5 py-3 text-sm font-black text-slate-950 shadow-2xl shadow-black/40 hover:bg-[#42f07f]"
+      >
+        Cart
+        <span className="rounded-full bg-slate-950 px-2.5 py-1 text-xs text-white">
+          {cartCount}
+        </span>
+      </button>
     </main>
   );
 }
