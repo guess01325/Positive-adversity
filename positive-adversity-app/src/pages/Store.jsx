@@ -66,6 +66,17 @@ const paymentMethods = [
 
 const FLAT_RATE_SHIPPING_AMOUNT = 17;
 
+function getRenderableProductImageUrl(imageUrl) {
+  if (
+    !imageUrl?.includes("res.cloudinary.com/") ||
+    !imageUrl.includes("/image/upload/")
+  ) {
+    return imageUrl;
+  }
+
+  return imageUrl.replace("/image/upload/", "/image/upload/f_auto,q_auto/");
+}
+
 export default function Store() {
   const [products, setProducts] = useState(storeProducts);
   const [activeCategory, setActiveCategory] = useState("All");
@@ -906,7 +917,7 @@ export default function Store() {
                       </span>
                     ) : null}
                     <img
-                      src={product.image || logoFull}
+                      src={getRenderableProductImageUrl(product.image) || logoFull}
                       alt={product.name}
                       className="max-h-[78%] object-contain transition duration-300 group-hover:scale-105"
                     />
