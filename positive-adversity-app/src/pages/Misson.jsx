@@ -15,16 +15,26 @@ export default function Misson() {
           </h1>
           <div className="mt-6 max-w-2xl space-y-4 text-base font-semibold leading-8 text-slate-300">
             <p>
-              At Positive Adversity Youth Services, our mission is to empower
-              youth to achieve their goals through mentorship, guidance, and
-              scholarship opportunities.
+              Positive Adversity Youth Services is to empower young people to
+              overcome adversity, reach their full potential, and build a strong
+              foundation for a successful future through mentorship, guidance,
+              accountability, positive relationships, and meaningful
+              opportunities.
             </p>
             <p>
-              We strive to develop leadership, respect, teamwork,
-              responsibility, and creative thinking while supporting young
-              people in their everyday challenges and personal growth. Through
-              consistent encouragement and positive influence, we aim to help
-              youth build confidence, purpose, and a stronger future.
+              We are committed to helping youth achieve their goals while
+              developing essential life skills, including leadership, respect,
+              teamwork, responsibility, confidence, and creative thinking.
+              Through consistent encouragement, positive role models,
+              scholarships, and community-based experiences, we help young
+              people navigate everyday challenges, make positive decisions, and
+              recognize their potential.
+            </p>
+            <p>
+              We believe every young person deserves someone who will listen,
+              encourage, challenge, and believe in them. Our goal is to provide
+              the support and opportunities young people need to turn adversity
+              into opportunity and build a brighter future.
             </p>
           </div>
 

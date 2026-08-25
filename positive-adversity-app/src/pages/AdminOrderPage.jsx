@@ -76,6 +76,7 @@ function toEditForm(order) {
     shippingAmount: Number(order.shippingAmount || 0),
     items: (order.items || []).map((item) => ({
       name: item.name || "",
+      category: item.category || "",
       size: item.size || "",
       quantity: Number(item.quantity || 1),
       price: Number(item.price || 0),
@@ -238,6 +239,7 @@ export default function AdminOrderPage() {
             ...currentForm.items,
             {
               name: product.name,
+              category: product.category || "",
               size,
               quantity: 1,
               price: product.price,
@@ -280,6 +282,7 @@ export default function AdminOrderPage() {
       const cleanedItems = editForm.items
         .map((item) => ({
           name: item.name.trim(),
+          category: (item.category || "").trim(),
           size: (item.size || "").trim(),
           quantity: Number(item.quantity || 0),
           price: Number(item.price || 0),
@@ -803,7 +806,7 @@ export default function AdminOrderPage() {
                   <p className="text-sm font-bold text-slate-900">Fulfillment</p>
                   <p className="mt-2 text-sm font-semibold text-slate-700">
                     {order.fulfillment?.method === "flat_rate"
-                      ? "$17 Flat Rate Shipping"
+                      ? `${formatCurrency(order.shippingAmount || 0)} Shipping`
                       : order.fulfillment?.method === "pickup"
                         ? "Local Pickup"
                         : order.fulfillment?.label || "Not specified"}

@@ -59,6 +59,7 @@ async function buildOrderItemsFromCheckout(transaction, checkout) {
     orderItems.push({
       productId: item.productId,
       name: cleanString(product.name, 160),
+      category: cleanString(product.category, 80),
       size: item.size,
       quantity: item.quantity,
       price,

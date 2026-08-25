@@ -3,6 +3,7 @@ const { db, FieldValue } = require("../config/firebase");
 const { reduceInventoryForOrder, buildOrderItemsFromCheckout } = require("../inventory/inventoryService");
 const { cleanString, normalizeEmail } = require("../utils/strings");
 const { logFunctionError } = require("../utils/logging");
+const { calculateShippingAmount } = require("../config/shipping");
 const { normalizeCheckout } = require("./orderValidation");
 const {
   STRIPE_PENDING_STATUS,
@@ -36,6 +37,18 @@ const submitStoreOrder = onCall(async (request) => {
         ? existingOrderSnap.data() || {}
         : null;
       const calculatedOrder = await buildOrderItemsFromCheckout(transaction, checkout);
+      const shippingAmount = calculateShippingAmount(
+        checkout.fulfillment.method,
+        calculatedOrder.items,
+      );
+      const fulfillment = {
+        ...checkout.fulfillment,
+        label:
+          checkout.fulfillment.method === "pickup"
+            ? "Local Pickup"
+            : `$${shippingAmount} Shipping`,
+        shippingAmount,
+      };
 
       if (existingOrder) {
         if (checkout.payment.option !== "stripe") {
@@ -82,13 +95,13 @@ const submitStoreOrder = onCall(async (request) => {
         customer: checkout.customer,
         customerEmailNormalized: normalizeEmail(checkout.customer.email),
         shippingAddress: checkout.shippingAddress,
-        fulfillment: checkout.fulfillment,
+        fulfillment,
         payment: checkout.payment,
         paymentMethod: checkout.payment.option,
         items: calculatedOrder.items,
         subtotal: calculatedOrder.total,
-        shippingAmount: checkout.fulfillment.shippingAmount,
-        total: calculatedOrder.total + checkout.fulfillment.shippingAmount,
+        shippingAmount,
+        total: calculatedOrder.total + shippingAmount,
         status: getOrderStatusForPayment(checkout.payment.option),
         fulfillmentStatus:
           checkout.payment.option === "stripe" ? "pending_payment" : "processing",

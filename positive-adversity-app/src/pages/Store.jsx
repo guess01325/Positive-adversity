@@ -9,6 +9,7 @@ import {
   fetchProducts,
 } from "../lib/firestore";
 import { getProductStore, storeProducts } from "../lib/products";
+import { calculateShippingAmount } from "../lib/shipping";
 import {
   clearStoreCheckoutDraft,
   createCheckoutAttemptId,
@@ -64,8 +65,6 @@ const paymentMethods = [
   },
 ];
 
-const FLAT_RATE_SHIPPING_AMOUNT = 17;
-
 function getRenderableProductImageUrl(imageUrl) {
   if (
     !imageUrl?.includes("res.cloudinary.com/") ||
@@ -82,6 +81,7 @@ export default function Store() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [activeCollection, setActiveCollection] = useState("All");
   const [selectedSizes, setSelectedSizes] = useState({});
+  const [selectedProductImage, setSelectedProductImage] = useState(null);
   const [cartItems, setCartItems] = useState([]);
   const [checkoutForm, setCheckoutForm] = useState(initialCheckoutForm);
   const [pendingStripeOrderId, setPendingStripeOrderId] = useState("");
@@ -164,6 +164,26 @@ export default function Store() {
     checkoutDraftLoaded,
   ]);
 
+  useEffect(() => {
+    if (!selectedProductImage) return undefined;
+
+    const previousBodyOverflow = document.body.style.overflow;
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setSelectedProductImage(null);
+      }
+    }
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedProductImage]);
+
   const categories = useMemo(
     () => ["All", ...new Set(products.map((product) => product.category))],
     [products],
@@ -219,10 +239,23 @@ export default function Store() {
     [cartItems],
   );
 
-  const shippingAmount =
-    checkoutForm.fulfillmentMethod === "flat_rate"
-      ? FLAT_RATE_SHIPPING_AMOUNT
-      : 0;
+  const shippingItems = useMemo(
+    () =>
+      cartItems.map((item) => {
+        const product = products.find(
+          (currentProduct) =>
+            (item.productId && currentProduct.id === item.productId) ||
+            currentProduct.name === item.name,
+        );
+
+        return { ...item, category: product?.category || item.category || "" };
+      }),
+    [cartItems, products],
+  );
+  const shippingAmount = calculateShippingAmount(
+    checkoutForm.fulfillmentMethod,
+    shippingItems,
+  );
   const orderTotal = cartTotal + shippingAmount;
 
   const selectedPaymentMethod = useMemo(
@@ -410,6 +443,7 @@ export default function Store() {
         {
           productId: product.id || "",
           name: product.name,
+          category: product.category,
           size,
           quantity: 1,
           price: product.price,
@@ -433,9 +467,20 @@ export default function Store() {
   }
 
   function scrollToCart() {
-    document
-      .getElementById("cart")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const cart = document.getElementById("cart");
+
+    if (!cart) return;
+
+    const header = document.querySelector("header");
+    const headerHeight =
+      header && window.getComputedStyle(header).position === "sticky"
+        ? header.getBoundingClientRect().height
+        : 0;
+
+    window.scrollTo({
+      top: window.scrollY + cart.getBoundingClientRect().top - headerHeight - 16,
+      behavior: "smooth",
+    });
   }
 
   function handleUpdateQuantity(itemName, itemSize, change) {
@@ -899,7 +944,18 @@ export default function Store() {
                   key={product.id || product.name}
                   className="group overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.06] shadow-xl shadow-black/20 hover:border-[#00a8ff]/60"
                 >
-                  <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-white p-6">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedProductImage({
+                        src:
+                          getRenderableProductImageUrl(product.image) || logoFull,
+                        alt: product.name,
+                      })
+                    }
+                    aria-label={`View larger image of ${product.name}`}
+                    className="relative flex aspect-[3/2] w-full cursor-zoom-in items-center justify-center overflow-hidden bg-white p-6"
+                  >
                     <img
                       src={productStoreTile?.logo || logoFull}
                       alt=""
@@ -921,7 +977,7 @@ export default function Store() {
                       alt={product.name}
                       className="max-h-[78%] object-contain transition duration-300 group-hover:scale-105"
                     />
-                  </div>
+                  </button>
 
                   <div className="p-5">
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-[#f6b332]">
@@ -930,15 +986,17 @@ export default function Store() {
                     <h3 className="mt-2 min-h-14 text-xl font-black leading-7 text-white">
                       {product.name}
                     </h3>
-                    <p className="mt-3 text-sm font-semibold leading-6 text-slate-300">
-                      Text if you got an offer:{" "}
-                      <a
-                        href="sms:8606256656"
-                        className="font-black text-[#00a8ff] underline decoration-[#00a8ff]/50 underline-offset-4 hover:text-[#35bcff]"
-                      >
-                        8606256656
-                      </a>
-                    </p>
+                    {product.category === "Shoes" ? (
+                      <p className="mt-3 text-sm font-semibold leading-6 text-slate-300">
+                        Text if you got an offer:{" "}
+                        <a
+                          href="sms:8606256656"
+                          className="font-black text-[#00a8ff] underline decoration-[#00a8ff]/50 underline-offset-4 hover:text-[#35bcff]"
+                        >
+                          8606256656
+                        </a>
+                      </p>
+                    ) : null}
 
                     {productSizes.length > 0 ? (
                       <div className="mt-4">
@@ -1123,9 +1181,11 @@ export default function Store() {
                         className="mt-1 h-4 w-4 shrink-0 rounded-full p-0 shadow-none"
                       />
                       <span>
-                        <span className="block font-black">$17 Flat Rate Shipping</span>
+                        <span className="block font-black">
+                          ${calculateShippingAmount("flat_rate", shippingItems)} Shipping
+                        </span>
                         <span className="block text-xs font-semibold text-slate-500">
-                          A $17 shipping charge is added once per order.
+                          Shipping is charged once per order.
                         </span>
                       </span>
                     </label>
@@ -1276,6 +1336,36 @@ export default function Store() {
           </div>
         </aside>
       </section>
+
+      {selectedProductImage ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Larger image of ${selectedProductImage.alt}`}
+          onClick={() => setSelectedProductImage(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 sm:p-8"
+        >
+          <div
+            className="relative flex max-h-full w-full max-w-5xl items-center justify-center"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <img
+              src={selectedProductImage.src}
+              alt={selectedProductImage.alt}
+              className="max-h-[calc(100dvh-2rem)] max-w-full object-contain sm:max-h-[calc(100dvh-4rem)]"
+            />
+            <button
+              type="button"
+              autoFocus
+              onClick={() => setSelectedProductImage(null)}
+              aria-label="Close enlarged product image"
+              className="absolute right-2 top-2 rounded-full bg-slate-950 px-4 py-2 text-sm font-black text-white shadow-xl hover:bg-slate-800"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <button
         type="button"

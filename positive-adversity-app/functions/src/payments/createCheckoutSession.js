@@ -1,6 +1,9 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { db, FieldValue } = require("../config/firebase");
-const { FLAT_RATE_SHIPPING_AMOUNT } = require("../config/shipping");
+const {
+  calculateShippingAmount,
+  isValidShippingAmount,
+} = require("../config/shipping");
 const {
   stripeSecretKey,
   getStripeClient,
@@ -91,9 +94,19 @@ const createCheckoutSession = onCall(
       });
 
       const shippingAmount = dollarsToCents(order.shippingAmount || 0);
+      const expectedShippingAmount = calculateShippingAmount(
+        order.fulfillment?.method,
+        items,
+      );
 
       if (order.fulfillment?.method === "flat_rate") {
-        if (shippingAmount !== dollarsToCents(FLAT_RATE_SHIPPING_AMOUNT)) {
+        if (
+          !isValidShippingAmount(
+            order.fulfillment.method,
+            items,
+            order.shippingAmount || 0,
+          )
+        ) {
           throw new HttpsError(
             "failed-precondition",
             "This order has an invalid flat-rate shipping amount.",
@@ -104,7 +117,7 @@ const createCheckoutSession = onCall(
           price_data: {
             currency: CURRENCY,
             product_data: {
-              name: "$17 Flat Rate Shipping",
+              name: `$${expectedShippingAmount} Shipping`,
             },
             unit_amount: shippingAmount,
           },

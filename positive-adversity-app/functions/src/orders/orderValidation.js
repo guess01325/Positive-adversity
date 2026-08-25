@@ -1,6 +1,5 @@
 const { HttpsError } = require("firebase-functions/v2/https");
 const { cleanString } = require("../utils/strings");
-const { FLAT_RATE_SHIPPING_AMOUNT } = require("../config/shipping");
 
 const PAYMENT_OPTIONS = new Set(["stripe"]);
 const FULFILLMENT_METHODS = new Set(["pickup", "flat_rate"]);
@@ -94,8 +93,6 @@ function normalizeCheckout(data) {
     },
     fulfillment: {
       method: fulfillmentMethod,
-      label: isLocalPickup ? "Local Pickup" : "$17 Flat Rate Shipping",
-      shippingAmount: isLocalPickup ? 0 : FLAT_RATE_SHIPPING_AMOUNT,
       status: "selected",
     },
     payment: {

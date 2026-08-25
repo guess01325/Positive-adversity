@@ -3,11 +3,11 @@ export const SERVICE_OPTIONS = [
   { value: "Mashantucket", label: "Mashantucket" },
   {
     value: "dcf_supervised_visitation",
-    label: "DCF Supervised Visitation",
+    label: "DCF Mentoring Service",
   },
   {
     value: "mashantucket_supervised_visitation",
-    label: "Mashantucket Supervised Visitation",
+    label: "Mashantucket Mentoring Service",
   },
 ];
 
