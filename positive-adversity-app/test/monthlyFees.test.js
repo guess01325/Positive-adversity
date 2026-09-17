@@ -27,7 +27,7 @@ test("adds supervised visitation services with stable identifiers", () => {
 test("keeps the existing supervision fee configuration unchanged", () => {
   const existingFee = getMonthlyFeeOption("dcf_supervision");
 
-  assert.equal(existingFee.label, "Supervision Fee");
+  assert.equal(existingFee.label, "Mentoring Service Fee");
   assert.equal(existingFee.amount, 11.25);
   assert.deepEqual(existingFee.eligibleServiceTypes, ["DCF"]);
 });

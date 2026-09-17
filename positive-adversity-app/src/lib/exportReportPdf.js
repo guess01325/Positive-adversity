@@ -299,7 +299,7 @@ export async function exportEntriesPdf({
     : Number(dcfSupervisionAmount || 0) > 0
     ? [
         {
-          label: "Supervision Fee",
+          label: "Mentoring Service Fee",
           amount: Number(dcfSupervisionAmount || 0),
         },
       ]

@@ -1,13 +1,13 @@
 export const SERVICE_OPTIONS = [
-  { value: "DCF", label: "DCF" },
-  { value: "Mashantucket", label: "Mashantucket" },
+  { value: "DCF", label: "DCF Mentoring Service" },
+  { value: "Mashantucket", label: "Mashantucket Mentoring Service" },
   {
     value: "dcf_supervised_visitation",
-    label: "DCF Mentoring Service",
+    label: "DCF Supervised Visitation Service",
   },
   {
     value: "mashantucket_supervised_visitation",
-    label: "Mashantucket Mentoring Service",
+    label: "Mashantucket Supervised Visitation Service",
   },
 ];
 
@@ -33,13 +33,13 @@ export const SERVICE_RATES = {
 export const MONTHLY_FEE_OPTIONS = [
   {
     value: "dcf_supervision",
-    label: "Supervision Fee",
+    label: "Mentoring Service Fee",
     amount: 11.25,
     eligibleServiceTypes: ["DCF"],
   },
   {
     value: "dcf_supervised_visitation_fee",
-    label: "DCF Supervised Visitation Fee",
+    label: "Supervised Visitation Fee",
     amount: 13.75,
     eligibleServiceTypes: ["dcf_supervised_visitation"],
   },
