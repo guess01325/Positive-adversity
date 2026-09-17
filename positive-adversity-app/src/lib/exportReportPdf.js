@@ -6,6 +6,16 @@ import autoTable from "jspdf-autotable";
 import logo from "../assets/logo-full.png";
 import { getEntryMonthKey } from "./entryMonth";
 
+function sanitizePdfNote(value) {
+  const pdfSafePictographs = new Set(["©", "®", "™"]);
+
+  return String(value).replace(
+    /[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{Emoji_Modifier}\u200D\u20E3\uFE0E\uFE0F\u{E0020}-\u{E007F}]/gu,
+    (character) =>
+      pdfSafePictographs.has(character) ? character : "",
+  );
+}
+
 function formatCurrency(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
@@ -203,7 +213,7 @@ function buildGroupedEntryRows(entries) {
 
     rows.push([
       {
-        content: `Note: ${entry?.note || "-"}`,
+        content: `Note: ${sanitizePdfNote(entry?.note || "-")}`,
         colSpan: 7,
         styles: {
           textColor: [70, 70, 70],
